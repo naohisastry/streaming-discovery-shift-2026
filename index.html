@@ -1,0 +1,916 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>配信の「探す疲れ」ダッシュボード Ver 1.00</title>
+<meta name="description" content="動画と作品の量がどれだけ増え、視聴者がどれだけ「探す」ことに疲れているかを、Cisco・Luminate・Gracenote・Hub Entertainment Research・Deloitte・Nielsenの公開データで示すダッシュボード。noteの連載「視聴者接点の再編・入口編」と連動しています。">
+<meta name="author" content="naohisastry">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+:root{
+  --bg:#0a0e1a; --panel:#111726; --fg:#eef1f5; --fg2:#b8c0cc; --muted:#8a93a1; --line:#273041; --grid:#1d2433;
+  --c1:#4b93ec; --c2:#e46c36; --dim:#3a4459;
+  --accent:#9cc2f0;
+  --f-display:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  --f-body:"BIZ UDPGothic","Hiragino Sans","Yu Gothic","Meiryo",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.7}
+header{max-width:1120px;margin:0 auto;padding:28px 16px 8px}
+h1{font-family:var(--f-display);font-weight:900;font-size:clamp(22px,3.4vw,32px);line-height:1.35;margin:0 0 8px}
+.lead{color:var(--fg2);margin:0;max-width:820px}
+.series{font:700 12px var(--f-body);letter-spacing:.12em;color:var(--accent);margin:0 0 6px}
+.hrow{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-start;justify-content:space-between}
+.hrow>div:first-child{min-width:0;flex:1 1 560px}
+.ver{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);white-space:nowrap}
+.tag{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;border:1px solid var(--accent);color:var(--fg)}
+nav{position:sticky;top:0;z-index:5;background:rgba(10,14,26,.94);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.tabs{max-width:1120px;margin:0 auto;padding:0 16px;display:flex;gap:4px;overflow-x:auto}
+.tabs button{flex:0 0 auto;background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);font:700 14px var(--f-body);padding:12px 12px 9px;cursor:pointer}
+.tabs button[aria-selected=true]{color:var(--fg);border-bottom-color:var(--accent)}
+.tabs .ep{flex:0 0 auto;align-self:center;font:700 11px var(--f-body);color:var(--accent);letter-spacing:.08em;padding:0 4px 0 10px}
+main{max-width:1120px;margin:0 auto;padding:16px}
+section.tab{display:none}
+section.tab.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 18px 14px;margin:0 0 18px}
+h2{font-family:var(--f-display);font-size:20px;margin:0 0 4px}
+h3{font-family:var(--f-display);font-size:16px;margin:0 0 4px}
+.sub{color:var(--fg2);font-size:13.5px;margin:0 0 12px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--fg2);margin:4px 0 8px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.axis text{fill:var(--muted);font:12px var(--f-body)}
+.axis path,.axis line{stroke:var(--line)}
+.grid line{stroke:var(--grid)}
+.grid path{display:none}
+.lbl{fill:var(--fg);font:12px var(--f-body)}
+.lbl.m{fill:var(--fg2)}
+.lbl.b{font-weight:700;font-size:13px}
+.note{color:var(--muted);font-size:12.5px;margin:8px 0 0}
+.note b{color:var(--fg2)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:820px){.two{grid-template-columns:1fr}}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0}
+.kpi>div{background:#0d1322;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpi .v{font:900 30px var(--f-display);line-height:1.2}
+.kpi .v small{font-size:14px;font-weight:700;color:var(--fg2);margin-left:2px}
+.kpi .k{color:var(--fg);font-size:13px;font-weight:700;margin:2px 0}
+.kpi .d{color:var(--fg2);font-size:12.5px}
+.kpi .s{color:var(--muted);font-size:11.5px;margin-top:4px}
+.row-title{font:700 13px var(--f-body);color:var(--accent);letter-spacing:.06em;margin:0 0 8px}
+details{margin-top:10px}
+summary{cursor:pointer;color:var(--fg2);font-size:13px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;font-size:13px;margin-top:8px;min-width:100%}
+td,th{border-bottom:1px solid var(--line);padding:4px 8px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--fg2);font-weight:700}
+.prose p,.prose li{color:var(--fg2);font-size:14px}
+.prose td,.prose th{white-space:normal;text-align:left;vertical-align:top}
+.prose td:first-child,.prose th:first-child{white-space:nowrap}
+a{color:var(--accent)}
+.tip{position:fixed;pointer-events:none;background:#1b2234;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--fg);box-shadow:0 6px 20px rgba(0,0,0,.4);opacity:0;transition:opacity .08s;max-width:300px;z-index:20}
+.tip .s{color:var(--muted);font-size:11.5px}
+.hit{fill:transparent;cursor:default}
+footer.app-footer{border-top:1px solid var(--line);margin-top:8px;padding:20px 0 28px}
+.footer-container{max-width:1120px;margin:0 auto;padding:0 16px;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
+.footer-container p{margin:0}
+.footer-title{font-size:12.5px;color:var(--fg2);font-weight:500}
+.footer-sub{font-size:11.5px;color:var(--muted)}
+#footer-line{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--muted);margin-top:3px}
+/* 第3回 */
+.map{display:grid;grid-template-columns:150px repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:6px}
+.mrow{display:contents}
+.mhead{font:700 13px var(--f-body);color:var(--accent);align-self:center;padding:4px 0}
+.cell{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#0d1322;font-size:12.5px;color:var(--fg2);position:relative}
+.cell b{display:block;color:var(--fg);font-size:13.5px;margin-bottom:2px}
+.cell .st{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:0 8px;margin-top:4px;color:#0a0e1a}
+.st.in{background:var(--c1)}.st.out{background:var(--c2)}.st.no{background:var(--dim);color:var(--fg)}
+.cell.in{border-left:4px solid var(--c1)}.cell.out{border-left:4px solid var(--c2)}.cell.no{border-left:4px solid var(--dim)}
+.mapgrid{display:grid;gap:0}
+.stk{border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;background:rgba(255,255,255,.02);display:grid;gap:8px}
+.stk.king{border:2px solid var(--accent);background:rgba(75,147,236,.07)}
+.stkh{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px}
+.stkh b{font-size:15px;color:var(--fg)}
+.stkno{font:700 16px var(--f-body);color:var(--accent)}
+.stkrole{font-size:12.5px;color:var(--fg2)}
+.kingtag{font-size:11px;font-weight:700;border-radius:999px;padding:1px 9px;background:var(--accent);color:#0a0e1a}
+.stkarr{text-align:center;color:var(--fg2);font-size:12.5px;padding:6px 0}
+.lane{display:grid;grid-template-columns:176px 1fr;gap:8px;align-items:stretch}
+.lane .cells{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+@media(max-width:620px){.lane{grid-template-columns:1fr}}
+.flow{display:grid;grid-template-columns:1fr 32px 1.6fr 32px 1fr;align-items:stretch;gap:0;margin-top:8px}
+.flow .box{border:1px solid var(--line);border-radius:12px;background:#0d1322;padding:12px 14px}
+.flow .box h3{margin-bottom:6px}
+.flow .box p{margin:0;font-size:13px;color:var(--fg2)}
+.flow .arr{display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:22px}
+.flow .box.key{border:2px solid var(--accent)}
+.prob{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:8px}
+.prob div{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel);font-size:12.5px;color:var(--fg2)}
+.prob b{display:block;color:var(--fg);font-size:13px}
+@media(max-width:820px){.flow{grid-template-columns:1fr}.flow .arr{transform:rotate(90deg);height:28px}}
+.layers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:820px){.layers{grid-template-columns:1fr}}
+.layer{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#0d1322}
+.layer ul{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--fg2)}
+.layer li{margin-bottom:4px}
+.layer li b{color:var(--fg)}
+.aibar{margin-top:12px;border:2px dashed var(--line);border-radius:12px;padding:10px 14px;font-size:13px;color:var(--fg2)}
+.aibar b{color:var(--fg)}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <div>
+      <div class="series">DISCOVERY SHIFT ・ 視聴者接点の再編・入口編</div>
+      <h1>配信の「探す疲れ」は、誰が肩代わりするのか</h1>
+      <p class="lead">動画と作品はどれだけ増え、視聴者はどれだけ「探す」ことに疲れているのか。公開データで確かめます。noteの連載（全3回）と連動しています。</p>
+    </div>
+    <div class="ver"><span class="tag">Ver 1.10</span><span>2026.11</span></div>
+  </div>
+</header>
+<nav><div class="tabs" role="tablist">
+  <span class="ep">第1回</span>
+  <button role="tab" aria-selected="true" data-t="t1">① 動画の爆発</button>
+  <button role="tab" aria-selected="false" data-t="t2">② 作品の在庫</button>
+  <button role="tab" aria-selected="false" data-t="t3">③ 探す疲れ</button>
+  <button role="tab" aria-selected="false" data-t="t4">④ 作品の選ばれ方</button>
+  <span class="ep">第2回</span>
+  <button role="tab" aria-selected="false" data-t="t5">⑤ 視聴の本拠地</button>
+  <button role="tab" aria-selected="false" data-t="t6">⑥ キングの入口</button>
+  <button role="tab" aria-selected="false" data-t="t7">⑦ 選ぶ場所</button>
+  <button role="tab" aria-selected="false" data-t="t8">⑧ 欧州の入口</button>
+  <span class="ep">第3回</span>
+  <button role="tab" aria-selected="false" data-t="t10">⑨ AIの入口</button>
+  <button role="tab" aria-selected="false" data-t="t11">⑩ AIとデータ</button>
+  <button role="tab" aria-selected="false" data-t="t12">⑪ 日本の番組データ</button>
+  <span class="ep">共通</span>
+  <button role="tab" aria-selected="false" data-t="t9">補足・出典</button>
+</div></nav>
+<main>
+
+<section class="tab on" id="t1">
+  <div class="card">
+    <h2>図1　消費者向けネット動画の通信量</h2>
+    <p class="sub">世界の消費者向けインターネット動画の通信量（月あたり、エクサバイト）。2022年は2018年時点の予測値です。</p>
+    <div id="c1" style="max-width:720px"></div>
+    <p class="note">出典：Cisco Visual Networking Index: Forecast and Trends, 2017–2022（2018年11月発表）付録の表。2017年は推計、2022年は予測。<b>版ごとに動画の定義が違うため、ほかの版の数字とはつないでいません。</b></p>
+    <details><summary>数値表</summary><div class="tbl" id="tb1"></div></details>
+  </div>
+  <div class="card">
+    <h3>参考：YouTubeに1分間に投稿される動画の量</h3>
+    <p class="sub">YouTubeの公式発表の値です（2019年以降の公式な更新はありません）。</p>
+    <div class="tbl" id="tb1b"></div>
+  </div>
+</section>
+
+<section class="tab" id="t2">
+  <div class="card">
+    <h2>図2　新作は減っても、作品の在庫は増え続ける</h2>
+    <p class="sub">左：米国で制作された番組の新規開始数（2019〜2025年）。右：5カ国で視聴できる作品の総数。<b>それぞれ対象が違う</b>ため、別々の目盛りで示しています。</p>
+    <div class="two" style="grid-template-columns:3fr 2fr">
+      <div>
+        <h3>米国で制作された番組の新規開始数（Luminate）</h3>
+        <div class="legend" id="lg2c"></div>
+        <div id="c2c"></div>
+        <p class="note"><b>有料配信のオリジナル番組は2022年の596本をピークに3年連続で減り、2025年は384本（ピーク比36%減）。</b>Netflixも196本（2022年）→133本（2025年）。米国制作・英語の番組。地上波とケーブルはゴールデンタイムのみ。大人向けの実写とアニメで、台本のない番組（リアリティ番組など）を含み、子ども向けアニメ、ショート動画、特番、テレビ映画は除きます。出典：Luminate「2025 Year-End Film &amp; TV Report」。</p>
+      </div>
+      <div>
+        <h3>視聴できる作品の総数（Gracenote）</h3>
+        <div id="c2b"></div>
+        <p class="note">米・英・加・墨・独の5カ国、放送と配信の合計。2023年6月は86.7%が配信サービス上。出典：Gracenote／Nielsen「State of Play」2023年。</p>
+      </div>
+    </div>
+    <p class="note">その後の伸び（前年比、2026年8月更新）：主要5社の定額制配信の作品数 +10%（HBO Maxを含む6社では +24%）、FASTのユニーク作品数 +14.5%（22.5万作品超）。出典：Gracenote Data Hub。</p>
+    <details><summary>数値表</summary><div class="tbl" id="tb2"></div><div class="tbl" id="tb2b"></div></details>
+  </div>
+</section>
+
+<section class="tab" id="t3">
+  <div class="card">
+    <h2>図3　探す疲れの指標</h2>
+    <p class="sub">上段は、同じ調査で前回と比べられる項目。下段は、別の調査の単年の指標です。</p>
+    <p class="row-title">上段　前回からの変化（米国、Hub Entertainment Research「Conquering Content」）</p>
+    <div class="two">
+      <div>
+        <h3>サービスの区別・新作の追いかけ</h3>
+        <div class="legend" id="lg3a"></div>
+        <div id="c3a"></div>
+      </div>
+      <div>
+        <h3>「この作品のためだけに加入した」人</h3>
+        <div id="c3b"></div>
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <h3>番組の多さをどう感じるか（2023〜2025年）</h3>
+      <div class="legend" id="lg3c"></div>
+      <div id="c3c" style="max-width:720px"></div>
+    </div>
+    <p class="note">米国の約1,600人（16〜74歳、毎年10月調査）。左は前回調査と2026年版、右は2022・2024・2026年版、下は2023〜2025年版（分割サンプル約800人、2つの意見の間で選ぶ形式のため、残りは「どちらでもない」寄り）。数値はHub Entertainment Researchの調査結果を引用し、図と分析は筆者によるもの。</p>
+    <p class="row-title" style="margin-top:18px">下段　単年の指標（調査ごとに対象が違います）</p>
+    <div class="kpi" id="k3"></div>
+    <details><summary>数値表</summary><div class="tbl" id="tb3"></div></details>
+  </div>
+</section>
+
+<section class="tab" id="t4">
+  <div class="card">
+    <h2>図4　配信サービスの作品を知るきっかけ・見る場所の探し方</h2>
+    <p class="sub">米国の視聴者に聞いた結果です。配信サービスのアプリの中のおすすめから作品を知る人は、2025年も2026年も14%のままで、友人の口コミの半分にもなりません。</p>
+    <div class="two">
+      <div>
+        <h3>新しいお気に入り番組を最初に知ったきっかけ（2025年→2026年）</h3>
+        <div class="legend" id="lg4a"></div>
+        <div id="c4a"></div>
+      </div>
+      <div>
+        <h3>どのサービスで見られるかの調べ方</h3>
+        <div id="c4b"></div>
+      </div>
+    </div>
+    <p class="note">出典：Hub Entertainment Research「Conquering Content」2025年版・2026年版（米国、過去1年に新しいお気に入り番組ができた人：2025年1,183人、2026年1,165人）。右は2026年版。<b>2026年に設問が一部改訂されている</b>（選択肢「配信サービスのおすすめ／提案」→「配信サービスのおすすめ」など）。2年分を並べたのは筆者。数値は同調査の結果を引用し、図と分析は筆者によるもの。</p>
+    <details><summary>数値表</summary><div class="tbl" id="tb4"></div></details>
+  </div>
+</section>
+
+<section class="tab" id="t5">
+  <div class="card">
+    <h2>図5　新しいお気に入り番組を、どこで見ているか</h2>
+    <p class="sub">過去1年に新しいお気に入りの番組ができた人に、その番組をどこで見ているかを聞いた結果です。2016年はほぼ拮抗していましたが、2024年には配信が8割を超えました。</p>
+    <div class="legend" id="lg5"></div>
+    <div id="c5" style="max-width:820px"></div>
+    <p class="note">米国のテレビ視聴者（各年約1,600人、16〜74歳）。「有料放送のチューナー経由」は、MVPD（ケーブル・衛星などの有料多チャンネル放送事業者）のセットトップボックスでの視聴で、リアルタイム、事業者が提供するオンデマンド（VOD）、録画を含みます。「ネット配信」の内訳（有料配信・広告付き配信・FASTなど）は公表されていません。両者の合計が100%にならない年は、残りが「その他」などとみられます。出典：Hub Entertainment Research「Conquering Content」2024年版。数値は同調査の結果を引用し、図と分析は筆者によるもの。</p>
+    <h3 style="margin-top:22px">いちばんよく使うテレビに、何がつながっているか</h3>
+    <p class="sub">家庭でいちばんよく使うテレビで見られる視聴手段の割合です。2022年に配信が有料放送に追いつき、2024年には配信60%、有料放送38%と差が開きました。</p>
+    <div class="legend" id="lg5b"></div>
+    <div id="c5b" style="max-width:560px"></div>
+    <p class="note">米国の消費者（2024年は2,517人、16〜74歳）。「配信」はいずれかの配信プラットフォーム、「有料放送」はケーブル・衛星などの有料放送事業者のサービス。両方がつながっているテレビもあるため、合計は100%になりません。出典：Hub Entertainment Research「Evolution of the TV Set」2024年版。数値は同調査の結果を引用し、図と分析は筆者によるもの。</p>
+    <details><summary>数値表</summary><div class="tbl" id="tb5"></div></details>
+  </div>
+</section>
+
+<section class="tab" id="t6">
+  <div class="card">
+    <h2>図6　テレビをつけて最初に見る画面の推移と、テレビOSのシェア（米国）</h2>
+    <p class="sub">ホーム画面から始まる人は、2024年65%→2025年70%→2026年74%と毎年増えています。伸びたのはテレビ本体のホーム画面（38%→46%→49%）。そのホーム画面を握る「キング」は、テレビメーカーよりもOSを持つプラットフォーマーです。</p>
+    <div class="two">
+      <div>
+        <h3>いちばんよく使うテレビをつけて、最初に見る画面</h3>
+        <div class="legend" id="lg6a"></div>
+        <div id="c6a"></div>
+        <p class="note">ホーム画面の合計は2024年65%→2025年70%→2026年74%。母数は米国でテレビが使える状態にある家庭（2025年2,465世帯、2026年2,425世帯。2024年は図に記載なし）。3年分を並べたのは筆者。<b>74%は「最初に目に入る画面」の割合で、ケーブルなどを解約した人の割合ではありません。</b>有料放送に加入している家庭でも、まずテレビのホーム画面が出て、そこからボックスに切り替える例が多くあります。</p>
+      </div>
+      <div>
+        <h3>いちばんよく使うテレビのOS</h3>
+        <div id="c6b"></div>
+        <p class="note">米国で、月1回以上スマートTVやストリーミング端末で配信を見る世帯（2,200世帯）。「その他」はXumo 3%、SmartCast（Vizio）3%、Comcast 1%、TiVo OS 1%、不明など4%の合計。</p>
+      </div>
+    </div>
+    <p class="row-title" style="margin-top:14px">キングは自ら番組を持ち、その位置に値段がつき始めた</p>
+    <div class="kpi" id="k6"></div>
+    <p class="note">下段の出典：Nielsen「The Gauge」（The Roku Channelの米国テレビ視聴時間に占める割合）、Roku 2024年1〜3月期決算説明、FOX・Rokuの発表（2026年6月15日）。Rokuの数値は同社自身の開示。</p>
+    <p class="note">上段の出典：Hub Entertainment Research「Evolution of the TV Set」2026年6月（米国の消費者2,500人、16〜74歳）、左図の2025年は同2025年6月版（米国の消費者2,528人）、2024年は同2024年版（米国の消費者2,517人）。いずれも16〜74歳。数値はHub Entertainment Researchの調査結果を引用し、図と分析は筆者によるもの。</p>
+    <details><summary>数値表</summary><div class="tbl" id="tb6"></div></details>
+  </div>
+</section>
+
+<section class="tab" id="t7">
+  <div class="card">
+    <h2>図7　テレビOS別の作品の探し方と、ホーム画面の滞在（米国）</h2>
+    <p class="sub">何を見るかを決める時間も、ホーム画面に集まっています。その画面でどれだけ作品が選ばれるかはテレビOSの設計で変わります（左）。右は、ホーム画面に並ぶサービスどうしの戦い：最初に開かれるサービスほど手放されません。</p>
+    <p class="row-title">何を見るかを決める場所も、ホーム画面に移った</p>
+    <div class="kpi" id="k7" style="margin-bottom:16px"></div>
+    <p class="note" style="margin-top:-8px;margin-bottom:14px">TiVoとRoku・MAGNAは別の調査。Roku・MAGNAはホーム画面の広告を売る側の調査。初期設定の数値はHub「Evolution of the TV Set」2026年6月。</p>
+    <div class="two">
+      <div>
+        <h3>見るものを探すとき、最初にすること</h3>
+        <div class="legend" id="lg7a"></div>
+        <div id="c7a"></div>
+        <p class="note">米国でそのOSのテレビ・端末を使う人（OSごとに106〜764人）。出典：Hub「Evolution of the TV Set」2026年6月。最上段の「参考：全体（2024年）」は同2024年版の、米国でテレビで配信を見る人全体の値（米国の消費者2,517人、16〜74歳）で、OS別とは調査年が異なります。</p>
+      </div>
+      <div>
+        <h3>サービスどうしの戦い：「1つだけ残すなら」に選ぶ割合</h3>
+        <div class="legend" id="lg7b"></div>
+        <div id="c7b"></div>
+        <p class="note">米国のテレビ視聴者1,600人（16〜74歳、2026年8月調査）。「最初に開く人」は、何か見たいときにそのサービスを最初に開く人。回答者が50人未満のサービスは除いています。「リアルタイムの放送」は有料放送、ネット経由の有料多チャンネル、アンテナでの受信の合計。出典：Hub「Decoding the Default」2026年9月。</p>
+      </div>
+    </div>
+    <p class="note">数値はHub Entertainment Researchの調査結果を引用し、図と分析は筆者によるもの。</p>
+    <details><summary>数値表</summary><div class="tbl" id="tb7"></div></details>
+  </div>
+</section>
+
+<section class="tab" id="t8">
+  <div class="card">
+    <h2>図8　欧州の視聴の入口：探し始める先と、最初に映る画面</h2>
+    <p class="sub">英国ではNetflixとBBCが並び、ドイツはまだ放送が入口。ただしネット経由で受信する世帯では、米国と同じくホーム画面が入口になっています。</p>
+    <div class="two">
+      <div>
+        <h3>英国：見るものを探すとき、最初に向かう先</h3>
+        <div id="c8a"></div>
+        <p class="note">英国の成人（Ofcom「Adults' PSM Tracker 2025/26」、2025年4月〜2026年3月）。NetflixとBBCの差は統計的に有意ではないとOfcomは注記。出典：Ofcom「Media Nations 2026」2026年7月。</p>
+      </div>
+      <div>
+        <h3>ドイツ：テレビをつけると最初にホーム画面が出る世帯</h3>
+        <div id="c8b"></div>
+        <p class="note">ドイツのテレビ世帯（ドイツ語を話す14歳以上）。2本の棒は母数が違います。上はテレビ世帯全体（68.2%は、まず放送中の番組が映る）。下はネット経由でテレビを受信している世帯だけ（2025年秋の調査でテレビ世帯の17.7%）。スマートTVのホーム画面を持つ世帯は57.7%ですが、ケーブル・衛星で受信する家庭ではホーム画面を持っていても、まず放送が映ります。出典：AGF「Plattformstudie 2026-I」2026年7月（66.7%は図表集p.4「AGF-Internet」区分）、同「2025-II」。</p>
+      </div>
+    </div>
+    <div class="kpi" id="k8" style="margin-top:14px"></div>
+    <h3 style="margin-top:18px">表1　欧州のプロミネンス規制（自国の放送をホーム画面で見つけやすくする義務）</h3>
+    <div class="tbl prose" id="tb8"></div>
+    <p class="note">運用開始時期と実効性の評価：三菱総合研究所「諸外国におけるプロミネンス制度および関連動向について」（情報通信審議会 放送政策委員会、2026年11月4日、2026年10月時点の調査）。ドイツは対象が300超で効果は限定的、フランスは一部の画面で義務が未実装と報告。</p>
+    <h3 style="margin-top:18px">参考図　同じUI骨格・違う「一等地」：地域別ホーム画面の中身（模式図）</h3>
+    <img src="assets_Claude/home_screen_by_country_20260722.png" alt="米国・英国・フランスのスマートTVホーム画面の中身を比べた模式図。米国は放送局系が3列中1列、英国とフランスは3列中2列" style="width:100%;height:auto;border-radius:10px;background:#fff;margin-top:6px">
+    <p class="note">筆者作成の模式図（noteマガジン「グラフで見える〇〇の世界」2026年7月22日のコラム「日本のテレビ画面だけ、時が止まっている」より）。Google TV／Samsung Tizenの各国版に共通する構図を模式化。英国の「9タイル」はOfcomの実施規範案の内容。</p>
+  </div>
+</section>
+
+<section class="tab" id="t10">
+  <div class="card">
+    <h2>図9　AIの入口は、誰の手の中にあるか</h2>
+    <p class="sub">「何を見ればいい？」をAIに聞く、第三の入口。海外ではテレビOS（キング）が真っ先に取り込み、日本ではテレビメーカーが導入を始めた一方、配信サービスのアプリの中にはほとんどありません。</p>
+    <p class="row-title">日本でも、6割が探すのに苦労している</p>
+    <div class="kpi" id="k10"></div>
+    <p class="note">東京・埼玉・千葉・神奈川に住む30〜59歳で、テレビ放送とネット動画の両方を月1回以上見ている1,000人（2024年4月12〜15日、単発の調査）。出典：スカパーJSAT「テレビ放送と動画配信サービスに関する調査2024」（ネットエイジア実施）。</p>
+    <h3 style="margin-top:18px">AIで作品を探す機能の状況（2026年11月時点）</h3>
+    <div class="legend"><span><i style="background:var(--c1)"></i>自らの画面の中で提供</span><span><i style="background:var(--c2)"></i>外のAI経由で提供</span><span><i style="background:var(--dim)"></i>日本ではなし</span></div>
+    <div class="mapgrid" id="m10"></div>
+    <p class="note">公開されている公式発表・ヘルプページで確認（ログイン後の画面や実機は未確認）。「先行利用」はAmazonの呼称では「早期アクセス」。海外テレビOSは米国での提供状況。テレビメーカーは資本で分類：TVS REGZAは2018年に東芝から中国ハイセンスへ（ハイセンスが95%出資）、シャープは2016年に台湾・鴻海の傘下に。ソニーは2026年1月、テレビ事業をTCLが51%を持つ合弁会社に移すと発表（2027年4月開始予定、「ソニー」「ブラビア」の名称は継続）。国内のテレビ販売シェアはREGZAが2022年から1位、2025年はシャープ19.7%で2位、ハイセンス16.6%で3位（BCN）。日本資本のメーカーも、テレビのOSはGoogle（ソニー）やAmazon（パナソニック、JVC）のものを使っています。</p>
+  </div>
+</section>
+
+<section class="tab" id="t11">
+  <div class="card">
+    <h2>図10　AIが作品を薦めるまでの流れ</h2>
+    <p class="sub">AIが得意なのは、あいまいな言葉から意図を読むこと。けれども答えの質は、AIの賢さよりも、どんなデータとつながっているかで決まります。</p>
+    <div class="flow">
+      <div class="box"><h3>① 意図を読む</h3><p>「疲れているから、何も考えずに笑える番組」のような、あいまいな言葉を理解する。<b style="color:var(--fg)">AIが得意な部分。</b></p></div>
+      <div class="arr">→</div>
+      <div class="box key"><h3>② データを引く</h3><p>その作品は何か、いま、どこで、いつまで見られるか。<b style="color:var(--fg)">答えの質はここで決まる。</b>下の4つの問題は、AIがどれだけ賢くなっても、データの側を整えない限り残る。</p></div>
+      <div class="arr">→</div>
+      <div class="box"><h3>③ 答える</h3><p>作品を薦め、視聴の画面へ連れていく。外れたときに信用を問われるのは、AIではなくAIを使う事業者。</p></div>
+    </div>
+    <h3 style="margin-top:18px">AIだけでは解けない、4つの構造問題</h3>
+    <div class="prob">
+      <div><b>① 配信先は、毎日変わる</b>契約の切り替えや見逃し配信の期限で、昨日見られた作品が今日は見られない。鮮度の高いデータが要る。</div>
+      <div><b>② 同じ名前を取り違える</b>同名のドラマと映画、リメイク、シーズン違い。作品ごとの固有の番号（ID）がなければ区別できない。</div>
+      <div><b>③ 日本の放送のデータは、ウェブにない</b>番組表や放送内容の記録は企業間の取引の中にあり、ウェブから学ぶAIからは見えにくい。</div>
+      <div><b>④ 外れたとき、信用を失うのはAIを使った側</b>AIは手段。答えが外れれば、AIを入口に置いた事業者が視聴者の信用を失う。だから、自ら管理する正確なデータにつなぐ必要がある。</div>
+    </div>
+    <p class="note">筆者による整理。メタデータ企業各社もAIの誤りの検証を公表しているが、自社のデータを売る企業の調査のため、ここでは数値を用いていない。</p>
+  </div>
+</section>
+
+<section class="tab" id="t12">
+  <div class="card">
+    <h2>図11　日本の番組データの実態</h2>
+    <p class="sub">日本の番組データは、番組表と放送内容の二種類が、人の手で丁寧に作られてきました。足りないのはデータそのものではなく、それがAIにつながっているかどうかです。</p>
+    <div class="layers">
+      <div class="layer"><h3>番組表のデータ</h3><ul>
+        <li><b>IPG（Gガイド）</b>：全国の放送局・配信事業者から正式に情報を受ける公認パートナー。2026年8月、TVerの地方局向け入稿システムと連携</li>
+        <li><b>東京ニュース通信社など</b>：ラジオ・テレビ欄を全国100社以上の新聞へ</li>
+        <li><b>NHK</b>：番組表を外部の開発者向けのAPIとして公開</li>
+      </ul></div>
+      <div class="layer"><h3>放送された内容を記録したデータ</h3><ul>
+        <li><b>エム・データ</b>：番組とCMの放送内容を「いつ・どこで・何が・どのように・何秒間」で記録。専属スタッフ約40名・24時間365日。2026年6月からAIで作り人が確かめる方式へ。「（仮称）TVメタデータ MCP」は構想段階</li>
+        <li><b>ワイヤーアクション「TVでた蔵」</b>：放送内容をテキストにして公開</li>
+      </ul></div>
+    </div>
+    <div class="aibar"><b>AIへのつながり（2026年11月時点）</b>：番組のデータがAIにつながった実例は、エム・データ×KDDI「Buffmee」（2026年10月）。ただし第一弾は「テレビで紹介されたおススメのスポット」で、番組で紹介された店や観光地を探す用途。視聴者が「何を見るか」を探す用途には、まだ届いていない。業界団体A-PAB（放送サービス高度化推進協会）はメタデータの共通化を検討中。</div>
+  </div>
+  <div class="card" id="fig12">
+    <h2>図12　利用が少ないサービスほど、ホーム画面のアイコンが選ばれる理由になっている</h2>
+    <p class="sub">有料配信サービスを「ホーム画面に最初からアイコンがあったから」選んだ、と答えた人の割合を、そのサービスを除く全体と比べた倍率（縦軸）。横軸はそのサービスの利用率。広く使われるサービスほど作品と料金で選ばれ、利用の少ないサービスほどホーム画面が効いています。</p>
+    <div class="legend"><span><i style="background:var(--c1)"></i>全体の1.4倍以上</span><span><i style="background:#2f5f99"></i>1.0〜1.4倍</span><span><i style="background:var(--c2)"></i>1.0倍未満</span><span>円の大きさ＝利用者数</span></div>
+    <div id="c12"></div>
+    <p class="note">利用率：有料の定額配信サービスの利用者2,287人のうち、そのサービスを利用している人の割合（Q1_1_A、複数回答）。倍率：そのサービスの利用者が「テレビやストリーミングデバイスのホーム画面に最初からアイコンがあったから」を選んだ割合（Q1_1_G_1、14の選択肢から複数回答）÷ そのサービスを除く20サービスの延べの回答率。公表されたサービス別の値をもとに筆者が算出。利用者が90人以上の12サービス。利用率と倍率の順位相関係数は−0.85。回答者4,000人にはネット接続テレビを持たない1,000人も含まれ、テレビの有無で分けた集計は公表されていません。利用率は2023年7月時点のこの調査の回答者の中での割合で、日本全体の利用者数ではありません。2023年7月10日実施（単発の調査）。出典：公正取引委員会「コネクテッドTV及び動画配信サービス等の利用実態に関する消費者向けアンケート調査結果」（2024年3月公表）。</p>
+    <details><summary>数値表</summary><div class="tbl" id="tb12"></div></details>
+    <div class="aibar"><b>測られていない入口</b>：テレビをつけて最初に何が映るか、見るものを探すのに何分かかるか、AIで作品を探す人がどれだけいるかを継続的に測った日本の公開調査は、主要な調査機関・官公庁・業界団体の公開資料を確認した範囲では見つからなかった（2026年11月時点）。</div>
+  </div>
+</section>
+
+<section class="tab" id="t9">
+  <div class="card prose">
+    <h2>補足・出典</h2>
+    <p>このダッシュボードは、noteの連載「配信の『探す疲れ』は、誰が肩代わりするのか」（視聴者接点の再編・入口編、全3回）の図表をまとめたものです。</p>
+    <h3>数字の扱い</h3>
+    <ul>
+      <li>推計で補わず、各調査が公表した値だけを使っています。</li>
+      <li>対象や定義が違う数字は、同じ図の中でつないだり、割り算したりしていません。</li>
+      <li>Hub Entertainment Research（<a href="https://hubresearchllc.com/" target="_blank" rel="noopener">hubresearchllc.com</a>）の数値は、同社の許諾を得て引用しています。図は筆者が独自に作成したもので、<b>数字から導いた分析や結論は筆者によるものであり、Hub Entertainment Researchによるものではありません。</b></li>
+    </ul>
+    <h3>出典一覧</h3>
+    <div class="tbl" id="tb9"></div>
+  </div>
+</section>
+</main>
+<footer class="app-footer">
+  <div class="footer-container">
+    <p class="footer-title">DISCOVERY SHIFT「配信の『探す疲れ』は、誰が肩代わりするのか」連動ダッシュボード</p>
+    <p class="footer-sub">企画・分析・データ設計：Naohisa Hashimoto（Media Architect）</p>
+    <p id="footer-line">© 2026 Naohisa Hashimoto’S Update date:2026/11/20</p>
+  </div>
+</footer>
+<div class="tip" id="tip"></div>
+<script>
+const DATA = {
+  video:[{y:"2017",v:56,f:false,note:"推計"},{y:"2022",v:240,f:true,note:"予測"}],
+  yt:[["2007年","6時間"],["2010年3月","24時間"],["2010年11月","35時間"],["2011年5月","48時間"],["2012年1月","60時間"],["2012年5月","72時間"],["2013年5月","100時間"],["2014年","300時間"],["2015年7月","400時間"],["2019年5月","500時間超"]],
+  lum:[{y:"2019",b:212,c:986,s:254,f:2},{y:"2020",b:183,c:826,s:349,f:6},{y:"2021",b:219,c:789,s:553,f:13},{y:"2022",b:198,c:880,s:596,f:21},{y:"2023",b:154,c:729,s:450,f:20},{y:"2024",b:196,c:635,s:417,f:18},{y:"2025",b:154,c:571,s:384,f:13}],
+  stock:[{p:"2021年7月",v:190},{p:"2023年6月",v:270}],
+  dumb:[{k:"配信サービスの違いが区別できない",a:41,b:47},{k:"新作をもっと楽に追いかけたい",a:49,b:56}],
+  single:[{y:"2022",v:39},{y:"2024",v:49},{y:"2026",v:34}],
+  kpi:[
+    {v:"12",u:"分",k:"見るものを探す平均時間",d:"18〜24歳は15分。47%が「1年前より長くなった」",s:"Gracenote State of Play 2026（6カ国3,000人、2026年8月調査）"},
+    {v:"51.6",u:"%",k:"見つからなければ解約するかもしれない",d:"前年は48.5%",s:"Gracenote State of Play 2026（6カ国）"},
+    {v:"43",u:"%",k:"6カ月以内に有料配信を解約",d:"1年前は39%。解約して同じサービスに再加入した人は27%",s:"Deloitte Digital Media Trends 2026年秋（米国3,518人）"},
+    {v:"77",u:"%",k:"見るものがない時はYouTubeを見る",d:"「よくある」31%＋「ときどき」46%。2025年は80%",s:"Hub Conquering Content 2025・2026（米国、無料YouTubeの利用者）"}
+  ],
+  disc:[{k:"知り合いから",a:27,b:29},{k:"予告編・クリップ",a:22,b:21},{k:"広告・番組宣伝",a:20,b:20},{k:"配信サービスのおすすめ",a:14,b:14,hl:true},{k:"レビュー",a:9,b:7}],
+  choice:[{y:"2023",good:43,bad:8},{y:"2024",good:42,bad:8},{y:"2025",good:38,bad:9}],
+  screen:[{k:"スマートTVのホーム画面",a:38,m:46,b:49,hl:true},{k:"ストリーミング端末のホーム画面",a:27,m:24,b:25,hl:true},{k:"有料放送のボックスの画面",a:19,m:16,b:13},{k:"アンテナで受信する地上波放送",a:10,m:8,b:8},{k:"その他",a:6,m:5,b:5}],
+  king:[{v:"3.1",u:"%",k:"The Roku Channel（Rokuの自社配信）の米国テレビ視聴シェア",d:"2025年2月 2.1% → 2026年2月 2.9% → 2026年5月 3.1%（過去最高）。視聴率ではなく、米国のテレビ画面の総視聴時間に占める取り分。同月のNetflix 8.0%、Prime Video 4.5%、Paramountの配信2.3%。2026年7月はYouTubeを除く配信で4位",s:"Nielsen The Gauge"},{v:"2",u:"倍超",k:"Rokuのホーム画面のメニューから始まった視聴時間（前年比）",d:"2024年1〜3月期。Roku自身の開示",s:"Roku決算説明（StreamTV Insider）"},{v:"約220",u:"億ドル",k:"FOXによるRoku買収（企業価値）",d:"2026年6月15日に合意、10月に両社株主が承認、2027年前半に完了見込み。統合後は米国テレビ視聴シェア3位の規模",s:"Advanced Television"}],
+  dwell:[{v:"57",u:"%",k:"番組を見ていない時間のうち、ホーム画面にいる割合",d:"米国・カナダの18歳以上4,493人（2025年10〜12月）。スマートTV保有者",s:"TiVo Video Trends Report Q4 2025"},{v:"44",u:"%",k:"見たいものが決まらず、ホーム画面を眺めることから始まる配信の視聴",d:"Rokuと広告会社MAGNAの共同調査（2024年）",s:"Roku・MAGNA（VideoNuze）"},{v:"51",u:"%",k:"初期設定のときに、すすめられたアプリを追加した",d:"その後にアプリを追加するのは「めったにない／ない」が56%",s:"Hub Evolution of the TV Set 2026（米国）"}],
+  os:[{k:"Roku",v:37},{k:"Fire TV（Amazon）",v:17},{k:"Android TV（Google）",v:14},{k:"Tizen（Samsung）",v:8},{k:"tvOS（Apple）",v:8},{k:"webOS（LG）",v:5},{k:"その他",v:12}],
+  osb:[{k:"参考：全体（2024年）",a:50,h:26,s:24,ref:true},{k:"webOS（LG）",a:67,h:18,s:16},{k:"Roku",a:58,h:20,s:22},{k:"Android TV",a:53,h:26,s:21},{k:"Tizen（Samsung）",a:50,h:24,s:26},{k:"Fire TV",a:48,h:28,s:24},{k:"tvOS（Apple）",a:45,h:29,s:26}],
+  dflt:[{k:"リアルタイムの放送",a:46,b:72},{k:"Netflix",a:28,b:62},{k:"YouTube（無料）",a:21,b:67},{k:"Prime Video",a:15,b:71},{k:"Hulu",a:10,b:53},{k:"FAST（YouTube除く）",a:10,b:45}],
+  uk:[{k:"Netflix",v:26},{k:"BBC",v:25},{k:"ITV",v:15},{k:"YouTube",v:10}],
+  de:[{k:"テレビ世帯全体",v:29.6},{k:"ネット経由で受信する世帯のみ",v:66.7}],
+  eu:[{v:"57.7",u:"%",k:"ドイツ：スマートTVのホーム画面がある世帯",d:"視聴をリアルタイムの番組から始める人は79.2%",s:"AGF Plattformstudie 2026-I"},{v:"66",u:"%",k:"スペイン：見たい作品を決めて探しにいく",d:"コネクテッドTVでの視聴について。スペインでネットを使う16〜75歳1,000人（2026年3〜4月）",s:"IAB Spain Estudio de Televisión Conectada 2026"},{v:"5",u:"回以上/日",k:"欧州：Samsung製スマートTVのホーム画面が開かれる回数",d:"10人に9人近くがホーム画面で次に見るものを決める。Samsung自身のデータと調査",s:"Samsung Ads Behind the Screens 2026"},{v:"45.9",u:"%",k:"欧州5カ国：FASTで、どの有料サービスに払う価値があるかを見極める",d:"英・独・仏・西・伊の視聴者750人",s:"Rakuten TV The FAST Advantage（2026年6月）"}],
+  prom:[["英国","Media Act 2024","公共放送の配信アプリ（BBC iPlayer、ITVX、Channel 4など）","指定されたコネクテッドTVのプラットフォーム","2026年7月に15のプラットフォームの指定が発効。公共放送アプリを「最初の9タイル以内」に置くことなどを求める実施規範を策定中で、運用はこれから"],["フランス","1986年放送法20-7条、Arcomの決定（2024年9月）","公共放送と、地上デジタルの全国無料民放（TF1、M6など）","テレビ、ボックス、コネクテッド機器の画面の運営者","2024年9月に運用開始。最も目立つサービスと同じ位置への表示を求め、毎年の報告を義務づけ"],["ドイツ","州間メディア協定（MStV）84条","公共放送（ARD、ZDFなど）と、州メディア庁が「Public Value」と認めた民放","スマートTVなど、ユーザーインターフェースの提供者","2022年10月に運用開始。2025年11月に新しい対象リストと並び順の推奨を公表"]],
+  conn:[{y:"2020",s:40,t:52},{y:"2022",s:52,t:48},{y:"2024",s:60,t:38}],
+  home:[{y:"2016",s:47,t:53},{y:"2018",s:54,t:42},{y:"2020",s:68,t:26},{y:"2022",s:75,t:23},{y:"2024",s:84,t:13}],
+  where:[{k:"Google検索",v:38},{k:"アプリ内の検索",v:32},{k:"横断検索",v:30}],
+  src:[
+    ["図1","Cisco「Visual Networking Index: Forecast and Trends, 2017–2022」2018年","https://sipotra.it/wp-content/uploads/2019/03/Cisco-Visual-Networking-Index-Forecast-and-Trends-2017-2022.pdf"],
+    ["図1 参考","YouTube公式発表（2010〜2013年は公式ブログ、2015年はVidCon、2019年はTubefilter経由）","https://www.tubefilter.com/2019/05/07/number-hours-video-uploaded-to-youtube-per-minute/"],
+    ["図6・図7","Hub Entertainment Research「Evolution of the TV Set」2026年6月（抜粋）","https://hubresearchllc.com/reports/"],
+    ["図5 下段・図6 左","Hub Entertainment Research「Evolution of the TV Set」2024年版（抜粋）","https://hubresearchllc.com/reports/"],
+    ["図6 左","Hub Entertainment Research「2025 Evolution of the TV Set」2025年6月（抜粋）","https://hubresearchllc.com/reports/?category=2025&title=2025-evolution-of-the-tv-set"],
+    ["図6 下段","Nielsen「The Gauge」2026年5月分","https://www.nielsen.com/news-center/2026/streaming-embarks-on-annual-summer-ascent-in-nielsens-may-2026-gauge-reports/"],
+    ["図6 下段","The Roku Channel 2025年2月・2026年2月の視聴シェア（MediaPost）","https://mediapost.com/publications/article/414358/roku-surpasses-100m-global-households.html"],
+    ["図6 下段","Roku 2024年1〜3月期決算説明（StreamTV Insider）","https://www.streamtvinsider.com/advertising/roku-eyes-home-screen-monetization-drive-platform-growth"],
+    ["図6 下段","FOX・Roku 買収合意（Advanced Television、2026年6月15日）","https://www.advanced-television.com/?p=286783"],
+    ["図6 下段","Nielsen「The Gauge」2026年7月分（Cord Cutters News）","https://cordcuttersnews.com/rokus-the-roku-channel-continues-to-grow-is-now-the-4th-largest-streaming-service-in-the-united-states/"],
+    ["図6 下段","筆者の過去コラム「FOXがRoku買収する理由。」（note、2026年6月20日）","https://note.com/naohisas/n/n87cb0a081317"],
+    ["図7 上段","TiVo「Video Trends Report Q4 2025」2026年6月","https://www.businesswire.com/news/home/20260604914149/en/"],
+    ["図7 上段","Roku・MAGNA「From Power On to Power Off」2024年（VideoNuze）","https://www.videonuze.com/article/inside-the-stream-roku-magna-interview-about-ctv-home-screen-research"],
+    ["図8","Samsung Ads「Behind the Screens 2026」（Broadcast）","https://www.broadcastnow.co.uk/tech/study-reveals-viewers-favour-apps-and-home-page-over-linear-tv/5217456.article"],
+    ["図7","Hub Entertainment Research「Decoding the Default」2026年9月（抜粋）","https://hubresearchllc.com/reports/"],
+    ["図8","Ofcom「Media Nations 2026」2026年7月","https://www.ofcom.org.uk/media-use-and-attitudes/media-habits-adults/nations-media-habits-revealed-in-annual-ofcom-report"],
+    ["図8","AGF Videoforschung「Plattformstudie 2026-I」2026年7月","https://www.agf.de/en/services/press/press-release/agf-plattformstudie-2026-i-wie-zuschauer-heute-zu-bewegtbildangeboten-finden-238"],
+    ["図8","Rakuten TV「The FAST Advantage」2026年6月（Advanced Television）","https://www.advanced-television.com/2026/06/03/report-fast-goes-mainstream/"],
+    ["図8","IAB Spain「Estudio de Televisión Conectada 2026」2026年5月6日","https://iabspain.es/iab-spain-presenta-el-estudio-de-television-conectada-2026/"],
+    ["表1","Ofcom「Media Act Implementation」／Arcom（2024年9月）／die medienanstalten（2025年11月）","https://www.ofcom.org.uk/tv-radio-and-on-demand/Media-Act-Implementation"],
+    ["表1","三菱総合研究所「諸外国におけるプロミネンス制度および関連動向について」（情報通信審議会 放送政策委員会 資料5-3、2026年11月4日）","https://www.soumu.go.jp/main_content/001099309.pdf"],
+    ["表1","Ofcom 実施規範案（2026年1月、Advanced Television）","https://www.advanced-television.com/2026/01/14/ofcom-opens-consultation-to-ensure-psb-prominence-on-ctvs/"],
+    ["参考図","筆者の過去コラム「日本のテレビ画面だけ、時が止まっている」（note、2026年7月22日）","https://note.com/naohisas/n/n7baab6b348ae"],
+    ["図2 左","Luminate「2025 Year-End Film & TV Report」2026年1月","https://luminatedata.com/reports/yearend-filmtv-industry-report-2025/"],
+    ["図2 右","Nielsen「2023 State of Play」","https://www.nielsen.com/news-center/2023/nielsens-state-of-play-report-delivers-new-insights-as-streamings-next-evolution-brings-content-discovery-challenges-for-viewers/"],
+    ["図2 注","Gracenote Data Hub（2026年8月20日更新）","https://gracenote.com/data-hub/"],
+    ["図3・図4・図5","Hub Entertainment Research「Conquering Content」2024年版・2025年版（抜粋）","https://hubresearchllc.com/reports/"],
+    ["図3・図4","Hub Entertainment Research「Conquering Content 2026」（Advanced Television 2026年11月13日）","https://www.advanced-television.com/2026/11/13/research-viewers-still-struggle-to-find-what-to-watch/"],
+    ["図3 下段","Gracenote「2026 State of Play」2026年11月12日（Advanced Television）","https://www.advanced-television.com/?p=295649"],
+    ["図3 下段","Deloitte「Digital Media Trends」2026年秋調査","https://www.deloitte.com/us/en/insights/industry/technology/streaming-portfolio-strategy.html"]
+  ]
+};
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const tip = document.getElementById('tip');
+function showTip(ev, html){ tip.innerHTML = html; tip.style.opacity = 1; moveTip(ev); }
+function moveTip(ev){ const w = tip.offsetWidth, h = tip.offsetHeight; let x = ev.clientX+14, y = ev.clientY+14;
+  if(x+w > innerWidth-8) x = ev.clientX-w-14; if(y+h > innerHeight-8) y = ev.clientY-h-14; tip.style.left = x+'px'; tip.style.top = y+'px'; }
+function hideTip(){ tip.style.opacity = 0; }
+function table(id, head, rows){ document.getElementById(id).innerHTML = '<table><tr>'+head.map(h=>`<th>${h}</th>`).join('')+'</tr>'+rows.map(r=>'<tr>'+r.map(v=>`<td>${v}</td>`).join('')+'</tr>').join('')+'</table>'; }
+function svgIn(id, W, H){ const el = d3.select('#'+id); el.selectAll('*').remove(); return el.append('svg').attr('viewBox',`0 0 ${W} ${H}`).attr('role','img'); }
+function hover(sel, html){ sel.on('mouseenter',(e,d)=>showTip(e,html(d))).on('mousemove',moveTip).on('mouseleave',hideTip); }
+// 上だけ丸めた棒（基準線側は角を立てる）
+function barPath(x,y,w,h,r){ r=Math.min(r,w/2,h); return `M${x},${y+h}V${y+r}Q${x},${y} ${x+r},${y}H${x+w-r}Q${x+w},${y} ${x+w},${y+r}V${y+h}Z`; }
+function hbarPath(x,y,w,h,r){ r=Math.min(r,h/2,w); return `M${x},${y}H${x+w-r}Q${x+w},${y} ${x+w},${y+r}V${y+h-r}Q${x+w},${y+h} ${x+w-r},${y+h}H${x}Z`; }
+
+// ① 図1
+function draw1(){
+  const W=640,H=320,m={t:24,r:16,b:36,l:48};
+  const s=svgIn('c1',W,H);
+  const defs=s.append('defs');
+  defs.append('pattern').attr('id','hatch').attr('width',8).attr('height',8).attr('patternUnits','userSpaceOnUse').attr('patternTransform','rotate(45)')
+    .call(p=>{p.append('rect').attr('width',8).attr('height',8).attr('fill',css('--c1')).attr('opacity',.35); p.append('line').attr('x1',0).attr('y1',0).attr('x2',0).attr('y2',8).attr('stroke',css('--c1')).attr('stroke-width',3);});
+  const x=d3.scaleBand().domain(DATA.video.map(d=>d.y)).range([m.l,W-m.r]).padding(.45);
+  const y=d3.scaleLinear().domain([0,260]).range([H-m.b,m.t]);
+  s.append('g').attr('class','grid').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W-m.l-m.r)).tickFormat(''));
+  s.append('g').attr('class','axis').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5));
+  s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).tickFormat(d=>d+'年'+(d==='2022'?'（予測）':'')));
+  s.append('text').attr('class','lbl m').attr('x',m.l).attr('y',12).text('エクサバイト／月');
+  const g=s.selectAll('.b').data(DATA.video).join('g');
+  g.append('path').attr('d',d=>barPath(x(d.y),y(d.v),x.bandwidth(),y(0)-y(d.v),4)).attr('fill',d=>d.f?'url(#hatch)':css('--c1')).attr('stroke',d=>d.f?css('--c1'):'none').attr('stroke-width',1.5);
+  g.append('text').attr('class','lbl b').attr('x',d=>x(d.y)+x.bandwidth()/2).attr('y',d=>y(d.v)-8).attr('text-anchor','middle').text(d=>d.v+' EB');
+  g.append('rect').attr('class','hit').attr('x',d=>x(d.y)-10).attr('width',x.bandwidth()+20).attr('y',m.t).attr('height',H-m.t-m.b);
+  hover(g.select('.hit'),d=>`<b>${d.y}年（${d.note}）</b><br>月${d.v}エクサバイト`);
+  // 倍率の注記
+  const x1=x('2017')+x.bandwidth(), x2=x('2022'), yy=y(150);
+  s.append('path').attr('d',`M${x1+8},${y(70)} Q${(x1+x2)/2},${yy-40} ${x2-8},${y(200)}`).attr('fill','none').attr('stroke',css('--fg2')).attr('stroke-width',1.5).attr('marker-end','url(#arw)');
+  defs.append('marker').attr('id','arw').attr('viewBox','0 0 10 10').attr('refX',8).attr('refY',5).attr('markerWidth',6).attr('markerHeight',6).attr('orient','auto-start-reverse').append('path').attr('d','M0,0L10,5L0,10z').attr('fill',css('--fg2'));
+  s.append('text').attr('class','lbl b').attr('x',(x1+x2)/2-20).attr('y',yy-52).attr('text-anchor','end').text('5年で約4.3倍');
+  table('tb1',['年','通信量（エクサバイト／月）','区分'],DATA.video.map(d=>[d.y+'年',d.v,d.note]));
+  table('tb1b',['時点','1分間に投稿される動画'],DATA.yt);
+}
+
+// ② 図2
+function draw2(){
+  { const keys=[['b','地上波','#8a93a1'],['c','ケーブル','#3a4459'],['s','有料配信（SVOD）',css('--c1')],['f','無料配信','#e46c36']];
+    document.getElementById('lg2c').innerHTML=keys.map(k=>`<span><i style="background:${k[2]}"></i>${k[1]}</span>`).join('');
+    const W=620,H=340,m={t:28,r:8,b:36,l:48};
+    const s=svgIn('c2c',W,H);
+    const x=d3.scaleBand().domain(DATA.lum.map(d=>d.y)).range([m.l,W-m.r]).padding(.3);
+    const y=d3.scaleLinear().domain([0,1800]).range([H-m.b,m.t]);
+    s.append('g').attr('class','grid').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(6).tickSize(-(W-m.l-m.r)).tickFormat(''));
+    s.append('g').attr('class','axis').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(6).tickFormat(d3.format(',')));
+    s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).tickFormat(d=>d+'年'));
+    s.append('text').attr('class','lbl m').attr('x',m.l).attr('y',12).text('本');
+    const g=s.selectAll('.r').data(DATA.lum).join('g');
+    g.each(function(d){ let acc=0; const gg=d3.select(this);
+      keys.forEach(([k,,c],i)=>{ const y0=y(acc), y1=y(acc+d[k]); acc+=d[k];
+        const h=Math.max(0,y0-y1-(i<3?2:0));
+        if(i===3) gg.append('path').attr('d',barPath(x(d.y),y1,x.bandwidth(),h,4)).attr('fill',c);
+        else gg.append('rect').attr('x',x(d.y)).attr('y',y1+(i<3?2:0)).attr('width',x.bandwidth()).attr('height',h).attr('fill',c);
+        if(k==='s') gg.append('text').attr('class','lbl b').attr('x',x(d.y)+x.bandwidth()/2).attr('y',(y0+y1)/2+4).attr('text-anchor','middle').style('fill','#fff').text(d.s);
+      });
+      gg.append('text').attr('class','lbl b').attr('x',x(d.y)+x.bandwidth()/2).attr('y',y(acc)-8).attr('text-anchor','middle').text(d3.format(',')(acc));
+    });
+    g.append('rect').attr('class','hit').attr('x',d=>x(d.y)-8).attr('width',x.bandwidth()+16).attr('y',m.t).attr('height',H-m.t-m.b);
+    hover(g.select('.hit'),d=>`<b>${d.y}年　合計 ${d3.format(',')(d.b+d.c+d.s+d.f)}本</b><br>有料配信 ${d.s}／ケーブル ${d.c}<br>地上波 ${d.b}／無料配信 ${d.f}`);
+  }
+  { const lg=document.getElementById('lg2c'), cl=document.querySelector('#c2c svg'), cr=document.getElementById('c2b');
+    const side=cr.getBoundingClientRect().top<cl.getBoundingClientRect().bottom-40; // 横並びのときだけ高さを合わせる
+    const W=420, targetH=cl.getBoundingClientRect().bottom-cr.getBoundingClientRect().top, H=(side&&cr.clientWidth>0)?Math.round(targetH*W/cr.clientWidth):320, sc=(side&&cr.clientWidth>0)?(cl.getBoundingClientRect().width/620)*(W/cr.clientWidth):1, m={t:24,r:12,b:Math.round(36*sc),l:44};
+    const s=svgIn('c2b',W,H);
+    const x=d3.scaleBand().domain(DATA.stock.map(d=>d.p)).range([m.l,W-m.r]).padding(.45);
+    const y=d3.scaleLinear().domain([0,300]).range([H-m.b,m.t]);
+    s.append('g').attr('class','grid').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(6).tickSize(-(W-m.l-m.r)).tickFormat(''));
+    s.append('g').attr('class','axis').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(6));
+    s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x));
+    s.append('text').attr('class','lbl m').attr('x',m.l).attr('y',12).text('万作品');
+    const g=s.selectAll('.b').data(DATA.stock).join('g');
+    g.append('path').attr('d',d=>barPath(x(d.p),y(d.v),x.bandwidth(),y(0)-y(d.v),4)).attr('fill',css('--c1'));
+    g.append('text').attr('class','lbl b').attr('x',d=>x(d.p)+x.bandwidth()/2).attr('y',d=>y(d.v)-8).attr('text-anchor','middle').text(d=>'約'+d.v+'万');
+    g.append('rect').attr('class','hit').attr('x',d=>x(d.p)-10).attr('width',x.bandwidth()+20).attr('y',m.t).attr('height',H-m.t-m.b);
+    hover(g.select('.hit'),d=>`<b>${d.p}</b><br>約${d.v}万作品<div class="s">米・英・加・墨・独、放送＋配信</div>`);
+  }
+  table('tb2',['年','地上波','ケーブル','有料配信','無料配信','合計'],DATA.lum.map(d=>[d.y+'年',d.b,d.c,d.s,d.f,d3.format(',')(d.b+d.c+d.s+d.f)]));
+  table('tb2b',['時点','視聴できる作品数'],DATA.stock.map(d=>[d.p,'約'+d.v+'万作品']));
+}
+
+// ③ 図3
+function draw3(){
+  document.getElementById('lg3a').innerHTML=`<span><i style="background:${css('--dim')}"></i>前回調査</span><span><i style="background:${css('--c1')}"></i>2026年</span>`;
+  { const W=520,H=260,m={t:28,r:12,b:52,l:40};
+    const s=svgIn('c3a',W,H);
+    const x0=d3.scaleBand().domain(DATA.dumb.map(d=>d.k)).range([m.l,W-m.r]).padding(.22);
+    const x1=d3.scaleBand().domain(['a','b']).range([0,x0.bandwidth()]).padding(.12);
+    const y=d3.scaleLinear().domain([0,70]).range([H-m.b,m.t]);
+    s.append('g').attr('class','grid').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(7).tickSize(-(W-m.l-m.r)).tickFormat(''));
+    s.append('g').attr('class','axis').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(7).tickFormat(d=>d+'%'));
+    s.append('line').attr('x1',m.l).attr('x2',W-m.r).attr('y1',y(0)).attr('y2',y(0)).attr('stroke',css('--line'));
+    const g=s.selectAll('.r').data(DATA.dumb).join('g').attr('transform',d=>`translate(${x0(d.k)},0)`);
+    g.append('text').attr('class','lbl').attr('x',x0.bandwidth()/2).attr('y',H-m.b+20).attr('text-anchor','middle').text(d=>d.k);
+    ['a','b'].forEach(k=>{
+      g.append('path').attr('d',d=>barPath(x1(k),y(d[k]),x1.bandwidth(),y(0)-y(d[k]),4)).attr('fill',k==='a'?css('--dim'):css('--c1'));
+      g.append('text').attr('class',k==='a'?'lbl m':'lbl b').attr('x',x1(k)+x1.bandwidth()/2).attr('y',d=>y(d[k])-8).attr('text-anchor','middle').text(d=>d[k]+'%');
+    });
+    g.append('text').attr('class','lbl b').attr('x',x0.bandwidth()/2).attr('y',H-m.b+40).attr('text-anchor','middle').attr('fill',css('--accent')).style('fill',css('--accent')).text(d=>'+'+(d.b-d.a)+'pt');
+    g.append('rect').attr('class','hit').attr('x',0).attr('width',x0.bandwidth()).attr('y',m.t).attr('height',H-m.t-m.b);
+    hover(g.select('.hit'),d=>`<b>${d.k}</b><br>前回 ${d.a}% → 2026年 ${d.b}%（+${d.b-d.a}pt）`);
+  }
+  { const W=520,H=260,m={t:28,r:12,b:52,l:40};
+    const s=svgIn('c3b',W,H);
+    const x=d3.scaleBand().domain(DATA.single.map(d=>d.y)).range([m.l,W-m.r]).padding(.4);
+    const y=d3.scaleLinear().domain([0,70]).range([H-m.b,m.t]);
+    s.append('g').attr('class','grid').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(7).tickSize(-(W-m.l-m.r)).tickFormat(''));
+    s.append('g').attr('class','axis').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(7).tickFormat(d=>d+'%'));
+    s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).tickFormat(d=>d+'年'));
+    const g=s.selectAll('.p').data(DATA.single).join('g');
+    g.append('path').attr('d',d=>barPath(x(d.y),y(d.v),x.bandwidth(),y(0)-y(d.v),4)).attr('fill',d=>d.y==='2026'?css('--c1'):css('--dim'));
+    g.append('text').attr('class',d=>d.y==='2026'?'lbl b':'lbl m').attr('x',d=>x(d.y)+x.bandwidth()/2).attr('y',d=>y(d.v)-8).attr('text-anchor','middle').text(d=>d.v+'%');
+    g.append('rect').attr('class','hit').attr('x',d=>x(d.y)-10).attr('width',x.bandwidth()+20).attr('y',m.t).attr('height',H-m.t-m.b);
+    hover(g.select('.hit'),d=>`<b>${d.y}年</b><br>${d.v}%<div class="s">そうした人の45%は作品が終わると解約（2026年）</div>`);
+  }
+  document.getElementById('lg3c').innerHTML=`<span><i style="background:${css('--c1')}"></i>番組が多いのは良い（いつでも何か見つかる）</span><span><i style="background:${css('--c2')}"></i>番組が多すぎて、うんざりする</span>`;
+  { const W=720,H=240,m={t:28,r:12,b:36,l:40};
+    const s=svgIn('c3c',W,H);
+    const x0=d3.scaleBand().domain(DATA.choice.map(d=>d.y)).range([m.l,W-m.r]).padding(.3);
+    const x1=d3.scaleBand().domain(['good','bad']).range([0,x0.bandwidth()]).padding(.12);
+    const y=d3.scaleLinear().domain([0,50]).range([H-m.b,m.t]);
+    s.append('g').attr('class','grid').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W-m.l-m.r)).tickFormat(''));
+    s.append('g').attr('class','axis').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(d=>d+'%'));
+    s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x0).tickFormat(d=>d+'年'));
+    const g=s.selectAll('.r').data(DATA.choice).join('g').attr('transform',d=>`translate(${x0(d.y)},0)`);
+    [['good','--c1'],['bad','--c2']].forEach(([k,c])=>{
+      g.append('path').attr('d',d=>barPath(x1(k),y(d[k]),x1.bandwidth(),y(0)-y(d[k]),4)).attr('fill',css(c));
+      g.append('text').attr('class','lbl b').attr('x',x1(k)+x1.bandwidth()/2).attr('y',d=>y(d[k])-8).attr('text-anchor','middle').text(d=>d[k]+'%');
+    });
+    g.append('rect').attr('class','hit').attr('x',0).attr('width',x0.bandwidth()).attr('y',m.t).attr('height',H-m.t-m.b);
+    hover(g.select('.hit'),d=>`<b>${d.y}年</b><br>良い ${d.good}%／うんざり ${d.bad}%`);
+  }
+  document.getElementById('k3').innerHTML=DATA.kpi.map(d=>`<div><div class="v">${d.v}<small>${d.u}</small></div><div class="k">${d.k}</div><div class="d">${d.d}</div><div class="s">${d.s}</div></div>`).join('');
+  table('tb3',['指標','値','出典'],
+    DATA.dumb.map(d=>[d.k,`前回 ${d.a}% → 2026年 ${d.b}%`,'Hub Conquering Content'])
+    .concat([['この作品のためだけに加入',DATA.single.map(d=>d.y+'年 '+d.v+'%').join(' → '),'Hub Conquering Content']])
+    .concat(DATA.choice.map(d=>['番組の多さ（'+d.y+'年）','良い '+d.good+'%／うんざり '+d.bad+'%','Hub Conquering Content 2025']))
+    .concat(DATA.kpi.map(d=>[d.k,d.v+d.u+'（'+d.d+'）',d.s])));
+}
+
+// ④ 図4
+function hbars(id, data, maxV){
+  const W=520,rowH=34,m={t:6,r:56,b:24,l:150},H=m.t+m.b+data.length*rowH;
+  const s=svgIn(id,W,H);
+  const x=d3.scaleLinear().domain([0,maxV]).range([m.l,W-m.r]);
+  const y=d3.scaleBand().domain(data.map(d=>d.k)).range([m.t,H-m.b]).padding(.3);
+  s.append('g').attr('class','grid').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickSize(-(H-m.t-m.b)).tickFormat(''));
+  s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickFormat(d=>d+'%'));
+  const g=s.selectAll('.r').data(data).join('g');
+  g.append('text').attr('class',d=>'lbl'+(d.hl?' b':' m')).attr('x',m.l-10).attr('y',d=>y(d.k)+y.bandwidth()/2+4).attr('text-anchor','end').text(d=>d.k);
+  g.append('path').attr('d',d=>hbarPath(x(0),y(d.k),x(d.v)-x(0),y.bandwidth(),4)).attr('fill',d=>d.hl?css('--c2'):css('--c1'));
+  g.append('text').attr('class','lbl b').attr('x',d=>x(d.v)+8).attr('y',d=>y(d.k)+y.bandwidth()/2+4).text(d=>d.v+'%');
+  g.append('rect').attr('class','hit').attr('x',0).attr('width',W).attr('y',d=>y(d.k)-4).attr('height',y.bandwidth()+8);
+  hover(g.select('.hit'),d=>`<b>${d.k}</b><br>${d.v}%`);
+}
+function draw4(){
+  document.getElementById('lg4a').innerHTML=`<span><i style="background:${css('--dim')}"></i>2025年</span><span><i style="background:${css('--c1')}"></i>2026年</span>`;
+  { const W=520,rowH=48,m={t:6,r:56,b:24,l:150},H=m.t+m.b+DATA.disc.length*rowH;
+    const s=svgIn('c4a',W,H);
+    const x=d3.scaleLinear().domain([0,35]).range([m.l,W-m.r]);
+    const y=d3.scaleBand().domain(DATA.disc.map(d=>d.k)).range([m.t,H-m.b]).padding(.18);
+    const y1=d3.scaleBand().domain(['a','b']).range([0,y.bandwidth()]).padding(.1);
+    s.append('g').attr('class','grid').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickSize(-(H-m.t-m.b)).tickFormat(''));
+    s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickFormat(d=>d+'%'));
+    const g=s.selectAll('.r').data(DATA.disc).join('g').attr('transform',d=>`translate(0,${y(d.k)})`);
+    g.append('text').attr('class',d=>'lbl'+(d.hl?' b':' m')).attr('x',m.l-10).attr('y',y.bandwidth()/2+4).attr('text-anchor','end').text(d=>d.k);
+    [['a','--dim'],['b','--c1']].forEach(([k,c])=>{
+      g.append('path').attr('d',d=>hbarPath(x(0),y1(k),x(d[k])-x(0),y1.bandwidth(),3)).attr('fill',d=>(k==='b'&&d.hl)?css('--c2'):css(c));
+      g.append('text').attr('class',k==='b'?'lbl b':'lbl m').attr('x',d=>x(d[k])+6).attr('y',y1(k)+y1.bandwidth()/2+4).text(d=>d[k]+'%');
+    });
+    g.append('rect').attr('class','hit').attr('x',0).attr('width',W).attr('y',-3).attr('height',y.bandwidth()+6);
+    hover(g.select('.hit'),d=>`<b>${d.k}</b><br>2025年 ${d.a}% → 2026年 ${d.b}%`);
+  }
+  hbars('c4b',DATA.where,45);
+  table('tb4',['項目','2025年','2026年'],DATA.disc.map(d=>['知ったきっかけ：'+d.k,d.a+'%',d.b+'%']).concat(DATA.where.map(d=>['調べ方：'+d.k,'—',d.v+'%'])));
+}
+function vgroup(id,data,W,H,lab){
+  const m={t:28,r:12,b:36,l:40};
+  const s=svgIn(id,W,H);
+  const x0=d3.scaleBand().domain(data.map(d=>d.y)).range([m.l,W-m.r]).padding(.28);
+  const x1=d3.scaleBand().domain(['s','t']).range([0,x0.bandwidth()]).padding(.12);
+  const y=d3.scaleLinear().domain([0,100]).range([H-m.b,m.t]);
+  s.append('g').attr('class','grid').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W-m.l-m.r)).tickFormat(''));
+  s.append('g').attr('class','axis').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(d=>d+'%'));
+  s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x0).tickFormat(d=>d+'年'));
+  const g=s.selectAll('.r').data(data).join('g').attr('transform',d=>`translate(${x0(d.y)},0)`);
+  [['s','--c1'],['t','--dim']].forEach(([k,c])=>{
+    g.append('path').attr('d',d=>barPath(x1(k),y(d[k]),x1.bandwidth(),y(0)-y(d[k]),4)).attr('fill',css(c));
+    g.append('text').attr('class',k==='s'?'lbl b':'lbl m').attr('x',x1(k)+x1.bandwidth()/2).attr('y',d=>y(d[k])-8).attr('text-anchor','middle').text(d=>d[k]+'%');
+  });
+  g.append('rect').attr('class','hit').attr('x',0).attr('width',x0.bandwidth()).attr('y',m.t).attr('height',H-m.t-m.b);
+  hover(g.select('.hit'),d=>`<b>${d.y}年</b><br>${lab[0]} ${d.s}%／${lab[1]} ${d.t}%`);
+}
+function draw5(){
+  document.getElementById('lg5').innerHTML=`<span><i style="background:${css('--c1')}"></i>ネット配信のアプリで見る</span><span><i style="background:${css('--dim')}"></i>有料放送のチューナー経由で見る（リアルタイム・事業者のオンデマンド・録画）</span>`;
+  vgroup('c5',DATA.home,820,300,['ネット配信','有料放送のチューナー経由']);
+  document.getElementById('lg5b').innerHTML=`<span><i style="background:${css('--c1')}"></i>配信サービスにつながっている</span><span><i style="background:${css('--dim')}"></i>有料放送につながっている</span>`;
+  vgroup('c5b',DATA.conn,560,280,['配信','有料放送']);
+  table('tb5',['年','新しいお気に入り番組を：ネット配信のアプリで見る','新しいお気に入り番組を：有料放送のチューナー経由で見る'],DATA.home.map(d=>[d.y+'年',d.s+'%',d.t+'%']));
+  document.getElementById('tb5').innerHTML+= '<div style="height:10px"></div>';
+  const t2=document.createElement('div'); t2.id='tb5b'; document.getElementById('tb5').appendChild(t2);
+  table('tb5b',['年','よく使うテレビ：配信につながっている','よく使うテレビ：有料放送につながっている'],DATA.conn.map(d=>[d.y+'年',d.s+'%',d.t+'%']));
+}
+function simpleH(id,data,maxV,opt={}){
+  const W=520,m={t:6,r:56,b:24,l:opt.l||190},H=opt.H||(m.t+m.b+data.length*(opt.rowH||34));
+  const s=svgIn(id,W,H);
+  const x=d3.scaleLinear().domain([0,maxV]).range([m.l,W-m.r]);
+  const y=d3.scaleBand().domain(data.map(d=>d.k)).range([m.t,H-m.b]).padding(.28);
+  s.append('g').attr('class','grid').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickSize(-(H-m.t-m.b)).tickFormat(''));
+  s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickFormat(d=>d+'%'));
+  const g=s.selectAll('.r').data(data).join('g');
+  g.append('text').attr('class',d=>'lbl'+(d.hl?' b':' m')).attr('x',m.l-10).attr('y',d=>y(d.k)+y.bandwidth()/2+4).attr('text-anchor','end').text(d=>d.k);
+  g.append('path').attr('d',d=>hbarPath(x(0),y(d.k),x(d.v)-x(0),y.bandwidth(),4)).attr('fill',d=>d.hl?css('--c1'):(opt.dim?css('--dim'):css('--c1')));
+  g.append('text').attr('class','lbl b').attr('x',d=>x(d.v)+8).attr('y',d=>y(d.k)+y.bandwidth()/2+4).text(d=>d.v+'%');
+  g.append('rect').attr('class','hit').attr('x',0).attr('width',W).attr('y',d=>y(d.k)-4).attr('height',y.bandwidth()+8);
+  hover(g.select('.hit'),d=>`<b>${d.k}</b><br>${d.v}%`);
+}
+function kpis(id,arr){ document.getElementById(id).innerHTML=arr.map(d=>`<div><div class="v">${d.v}<small>${d.u}</small></div><div class="k">${d.k}</div>${d.d?`<div class="d">${d.d}</div>`:''}<div class="s">${d.s}</div></div>`).join(''); }
+function draw6(){
+  const C6=[['a',css('--dim'),'2024年'],['m','#7fa8de','2025年'],['b',css('--c1'),'2026年']];
+  document.getElementById('lg6a').innerHTML=C6.map(c=>`<span><i style="background:${c[1]}"></i>${c[2]}</span>`).join('');
+  { const W=520,rowH=62,m={t:6,r:56,b:24,l:200},H=m.t+m.b+DATA.screen.length*rowH;
+    const s=svgIn('c6a',W,H);
+    const x=d3.scaleLinear().domain([0,60]).range([m.l,W-m.r]);
+    const y=d3.scaleBand().domain(DATA.screen.map(d=>d.k)).range([m.t,H-m.b]).padding(.16);
+    const y1=d3.scaleBand().domain(['a','m','b']).range([0,y.bandwidth()]).padding(.12);
+    s.append('g').attr('class','grid').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickSize(-(H-m.t-m.b)).tickFormat(''));
+    s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickFormat(d=>d+'%'));
+    const g=s.selectAll('.r').data(DATA.screen).join('g').attr('transform',d=>`translate(0,${y(d.k)})`);
+    g.append('text').attr('class',d=>'lbl'+(d.hl?' b':' m')).attr('x',m.l-10).attr('y',y.bandwidth()/2+4).attr('text-anchor','end').text(d=>d.k);
+    C6.forEach(([k,c])=>{
+      g.append('path').attr('d',d=>hbarPath(x(0),y1(k),x(d[k])-x(0),y1.bandwidth(),3)).attr('fill',c);
+      g.append('text').attr('class',k==='b'?'lbl b':'lbl m').attr('x',d=>x(d[k])+6).attr('y',y1(k)+y1.bandwidth()/2+4).text(d=>d[k]+'%');
+    });
+    g.append('rect').attr('class','hit').attr('x',0).attr('width',W).attr('y',-3).attr('height',y.bandwidth()+6);
+    hover(g.select('.hit'),d=>`<b>${d.k}</b><br>2024年 ${d.a}% → 2025年 ${d.m}% → 2026年 ${d.b}%`);
+  }
+  { const cl=document.querySelector('#c6a svg'), cr=document.getElementById('c6b');
+    const side=cr.getBoundingClientRect().top<cl.getBoundingClientRect().bottom-40; // 横並びのときだけ高さを合わせる
+    const H=(side&&cr.clientWidth>0)?Math.round((cl.getBoundingClientRect().bottom-cr.getBoundingClientRect().top)*520/cr.clientWidth):undefined;
+    simpleH('c6b',DATA.os,45,{l:170,H}); }
+  kpis('k6',DATA.king);
+  table('tb6',['項目','割合'],DATA.screen.map(d=>['最初に見る画面：'+d.k,'2024年 '+d.a+'% → 2025年 '+d.m+'% → 2026年 '+d.b+'%']).concat(DATA.os.map(d=>['OS：'+d.k,d.v+'%'])).concat(DATA.king.map(d=>[d.k,d.v+d.u+'（'+d.d+'）'])));
+}
+function draw7(){
+  kpis('k7',DATA.dwell);
+  const keys=[['a','アプリを開く',css('--dim')],['h','ホーム画面の作品から選ぶ',css('--c1')],['s','検索する','#8a93a1']];
+  document.getElementById('lg7a').innerHTML=keys.map(k=>`<span><i style="background:${k[2]}"></i>${k[1]}</span>`).join('');
+  const drawA=(Hset)=>{ const W=520,rowH=36,m={t:6,r:12,b:24,l:150},H=Hset||(m.t+m.b+DATA.osb.length*rowH+10);
+    const s=svgIn('c7a',W,H);
+    const x=d3.scaleLinear().domain([0,101]).range([m.l,W-m.r]);
+    const y0=d3.scaleBand().domain(DATA.osb.map(d=>d.k)).range([m.t,H-m.b-10]).padding(.25); const y=k=>y0(k)+(k===DATA.osb[0].k?0:10); y.bandwidth=y0.bandwidth;
+    s.append('line').attr('x1',8).attr('x2',W-m.r).attr('y1',y0(DATA.osb[1].k)+4).attr('y2',y0(DATA.osb[1].k)+4).attr('stroke',css('--line')).attr('stroke-dasharray','3 3');
+    s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(5).tickFormat(d=>d+'%'));
+    const g=s.selectAll('.r').data(DATA.osb).join('g');
+    g.append('text').attr('class','lbl m').attr('x',m.l-10).attr('y',d=>y(d.k)+y.bandwidth()/2+4).attr('text-anchor','end').style('font-style',d=>d.ref?'italic':null).text(d=>d.k);
+    g.each(function(d){ let acc=0; const gg=d3.select(this).style('opacity',d.ref?.6:1);
+      keys.forEach(([k,,c])=>{ const x0=x(acc); acc+=d[k]; const w=Math.max(0,x(acc)-x0-2);
+        gg.append('rect').attr('x',x0).attr('y',y(d.k)).attr('width',w).attr('height',y.bandwidth()).attr('fill',c).attr('rx',2);
+        gg.append('text').attr('class','lbl b').attr('x',x0+w/2).attr('y',y(d.k)+y.bandwidth()/2+4).attr('text-anchor','middle').style('fill',k==='h'?'#fff':css('--fg')).text(d[k]); });
+    });
+    g.append('rect').attr('class','hit').attr('x',0).attr('width',W).attr('y',d=>y(d.k)-3).attr('height',y.bandwidth()+6);
+    hover(g.select('.hit'),d=>`<b>${d.k}</b>${d.ref?'<br>テレビで配信を見る人全体（2024年版）':'<br>2026年版'}<br>アプリを開く ${d.a}%／ホーム画面から選ぶ ${d.h}%／検索 ${d.s}%`);
+  };
+  drawA();
+  document.getElementById('lg7b').innerHTML=`<span><i style="background:${css('--dim')}"></i>そのサービスの利用者全体</span><span><i style="background:${css('--c1')}"></i>そのサービスを最初に開く人</span>`;
+  const drawB=(Hset)=>{ const W=520,rowH=46,m={t:6,r:46,b:24,l:150},H=Hset||(m.t+m.b+DATA.dflt.length*rowH);
+    const s=svgIn('c7b',W,H);
+    const x=d3.scaleLinear().domain([0,85]).range([m.l,W-m.r]);
+    const y=d3.scaleBand().domain(DATA.dflt.map(d=>d.k)).range([m.t,H-m.b]).padding(.18);
+    const y1=d3.scaleBand().domain(['a','b']).range([0,y.bandwidth()]).padding(.1);
+    s.append('g').attr('class','grid').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickSize(-(H-m.t-m.b)).tickFormat(''));
+    s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickFormat(d=>d+'%'));
+    const g=s.selectAll('.r').data(DATA.dflt).join('g').attr('transform',d=>`translate(0,${y(d.k)})`);
+    g.append('text').attr('class','lbl m').attr('x',m.l-10).attr('y',y.bandwidth()/2+4).attr('text-anchor','end').text(d=>d.k);
+    [['a','--dim'],['b','--c1']].forEach(([k,c])=>{
+      g.append('path').attr('d',d=>hbarPath(x(0),y1(k),x(d[k])-x(0),y1.bandwidth(),3)).attr('fill',css(c));
+      g.append('text').attr('class',k==='b'?'lbl b':'lbl m').attr('x',d=>x(d[k])+6).attr('y',y1(k)+y1.bandwidth()/2+4).text(d=>d[k]+'%');
+    });
+    g.append('rect').attr('class','hit').attr('x',0).attr('width',W).attr('y',-3).attr('height',y.bandwidth()+6);
+    hover(g.select('.hit'),d=>`<b>${d.k}</b><br>利用者全体 ${d.a}% → 最初に開く人 ${d.b}%`);
+  };
+  drawB();
+  { const a=document.querySelector('#c7a svg'), b=document.querySelector('#c7b svg'), ca=document.getElementById('c7a'), cb=document.getElementById('c7b');
+    const ra=a.getBoundingClientRect(), rb=b.getBoundingClientRect();
+    if(Math.abs(ra.top-rb.top)<ra.height*0.8 && ca.clientWidth>0){ // 横並びのときだけ高さを合わせる
+      const bottom=Math.max(ra.bottom,rb.bottom);
+      if(ra.bottom<bottom-1) drawA(Math.round((bottom-ca.getBoundingClientRect().top)*520/ca.clientWidth));
+      else if(rb.bottom<bottom-1) drawB(Math.round((bottom-cb.getBoundingClientRect().top)*520/cb.clientWidth)); } }
+  table('tb7',['項目','値'],DATA.osb.map(d=>[d.k,`アプリ ${d.a}%／ホーム画面 ${d.h}%／検索 ${d.s}%`]).concat(DATA.dflt.map(d=>['1つだけ残すなら：'+d.k,`全体 ${d.a}%／最初に開く人 ${d.b}%`])));
+}
+function draw8(){
+  simpleH('c8a',DATA.uk,35,{l:110});
+  simpleH('c8b',DATA.de,80,{l:190,rowH:44});
+  { const a=document.querySelector('#c8a svg'), b=document.querySelector('#c8b svg'), ca=document.getElementById('c8a'), cb=document.getElementById('c8b');
+    const ra=a.getBoundingClientRect(), rb=b.getBoundingClientRect();
+    if(Math.abs(ra.top-rb.top)<Math.max(ra.height,rb.height)*0.8 && ca.clientWidth>0){ // 横並びのときだけ高さを合わせる
+      const top=Math.min(ra.top,rb.top), bottom=Math.max(ra.bottom,rb.bottom);
+      if(ra.bottom<bottom-1) simpleH('c8a',DATA.uk,35,{l:110,H:Math.round((bottom-ca.getBoundingClientRect().top)*520/ca.clientWidth)});
+      else if(rb.bottom<bottom-1) simpleH('c8b',DATA.de,80,{l:190,H:Math.round((bottom-cb.getBoundingClientRect().top)*520/cb.clientWidth)}); } }
+  kpis('k8',DATA.eu);
+  document.getElementById('tb8').innerHTML='<table><tr><th>国</th><th>根拠</th><th>優遇される側</th><th>義務を負う側</th><th>現状（2026年11月時点）</th></tr>'+DATA.prom.map(r=>'<tr>'+r.map(v=>`<td>${v}</td>`).join('')+'</tr>').join('')+'</table>';
+}
+function draw9(){
+  document.getElementById('tb9').innerHTML='<table><tr><th>図</th><th>出典</th></tr>'+DATA.src.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}<br><a href="${r[2]}" target="_blank" rel="noopener">${r[2]}</a></td></tr>`).join('')+'</table>';
+}
+
+Object.assign(DATA,{
+  jpk:[{v:"60.0",u:"%",k:"配信サービスで見たい作品を探すのに苦労することがある",d:"「ない」は40.0%",s:"スカパーJSAT 2024"},{v:"18.7",u:"%",k:"見たい作品がどのサービスで見られるかわからず困る",d:"「動画視聴あるある」として経験を挙げた割合（複数回答）",s:"スカパーJSAT 2024"},{v:"66.4",u:"%",k:"複数の配信サービスを横断し、自分に合った作品を提案してくれると嬉しい",d:"「そう思う」の計",s:"スカパーJSAT 2024"}],
+  aimap:[
+    {no:"①",title:"機器の層：テレビメーカー",role:"テレビという箱をつくり、OSを載せる",groups:[
+      {label:"日本資本",cells:[
+        {n:"ソニー BRAVIA",t:"OS：Google TV。Gemini対応（2026年モデル）。テレビ事業は2027年4月にTCLが51%を持つ合弁会社へ移る予定",c:"in",st:"提供中"},
+        {n:"パナソニック VIERA",t:"OS：Fire TV（Amazon）。Alexa+（2026年10月〜）",c:"in",st:"先行利用"},
+        {n:"JVC",t:"ヤマダホールディングスが商標の許諾を受けて企画・販売。OS：Fire TV。Alexa+（2026年10月〜）",c:"in",st:"先行利用"}]},
+      {label:"日本ブランド・海外資本",cells:[
+        {n:"TVS REGZA",t:"中国ハイセンスが95%を出資。AIボイスナビゲーター（Gemini、2025年モデル〜）",c:"in",st:"提供中"},
+        {n:"シャープ AQUOS",t:"台湾・鴻海の傘下。OS：Google TV。AQUOS AI（2026年5月〜）",c:"in",st:"提供中"}]},
+      {label:"海外メーカー",cells:[
+        {n:"TCL（中国）",t:"OS：Google TV。Gemini for Google TV（2026年8月〜、2026年モデル）",c:"in",st:"提供中"},
+        {n:"ハイセンス（中国）",t:"OS：VIDAA（自社）。Copilotの統合を発表（CES 2026）。日本での提供は未確認",c:"no",st:"日本は未確認"},
+        {n:"LG（韓国）",t:"OS：webOS（自社）。日本での作品探しの生成AIは確認できず",c:"no",st:"確認できず"}]}]},
+    {no:"②",title:"OSの層：テレビOS（キング）",role:"ホーム画面を握り、その上にAIを重ねる",king:true,groups:[
+      {label:"米国での提供状況",cells:[
+        {n:"Google TV",t:"Gemini for TV。会話で作品探し・あらすじ要約（2025年9月〜）。日本ではソニー・シャープ・TCLが搭載",c:"in",st:"米国で提供中"},
+        {n:"Fire TV（Amazon）",t:"Alexa+。対応する全機種に追加料金なしで展開。日本ではパナソニック・JVCが搭載",c:"in",st:"米国で提供中"},
+        {n:"webOS（LG）",t:"Copilot（webOS 25）、Gemini（webOS 26）",c:"in",st:"米国で提供中"},
+        {n:"Tizen（Samsung）",t:"Copilot、Vision AI Companion",c:"in",st:"米国で提供中"},
+        {n:"Roku",t:"AIの音声検索（2025年秋）。テレビ関連に特化",c:"in",st:"米国で提供中"}]}]},
+    {no:"③",title:"サービスの層：日本の配信サービス",role:"OSのホーム画面に並び、作品を届ける（キングメーカー）",groups:[
+      {label:"",cells:[
+        {n:"TVer",t:"TVerコンシェルジュ（β版）。アプリ7.0.0以降では使えない",c:"in",st:"β・新版で不可"},
+        {n:"ABEMA",t:"ChatGPTの中で「@ABEMA」（2026年4月〜）",c:"out",st:"外のAI経由"},
+        {n:"Prime Video",t:"Alexa+に話しかけて探す（2026年10月〜）",c:"out",st:"外のAI経由・先行利用"},
+        {n:"Netflix",t:"AI検索は英語のみ。日本では使えない",c:"no",st:"日本ではなし"},
+        {n:"Disney+",t:"米国本社が少数の加入者でベータ試験。日本は記載なし",c:"no",st:"日本ではなし"},
+        {n:"U-NEXT・Hulu・Lemino・DMM TV・NHK ONE",t:"AIで作品を探す機能はなし",c:"no",st:"なし"}]}]}
+  ],
+  jlift:[{k:"Prime Video",n:1519,u:66.4,r:4.7,b:9.4,l:0.50,bt:6.1},{k:"Netflix",n:699,u:30.6,r:6.0,b:8.1,l:0.74,bt:9.4},{k:"Disney+",n:253,u:11.1,r:7.1,b:7.8,l:0.91,bt:7.5},{k:"U-NEXT・Paravi",n:236,u:10.3,r:8.9,b:7.7,l:1.15,bt:6.8},{k:"YouTube Premium",n:232,u:10.1,r:9.9,b:7.7,l:1.29,bt:9.1},{k:"Hulu",n:220,u:9.6,r:8.6,b:7.7,l:1.11,bt:7.7},{k:"DAZN",n:160,u:7.0,r:8.1,b:7.8,l:1.04,bt:5.0},{k:"ABEMAプレミアム",n:152,u:6.6,r:11.8,b:7.6,l:1.55,bt:11.8},{k:"WOWOWオンデマンド",n:141,u:6.2,r:12.1,b:7.6,l:1.58,bt:9.2},{k:"dアニメストア",n:127,u:5.6,r:9.4,b:7.7,l:1.22,bt:6.3},{k:"J:COMオンデマンド",n:109,u:4.8,r:11.0,b:7.7,l:1.43,bt:15.6},{k:"NHKオンデマンド",n:95,u:4.2,r:12.6,b:7.7,l:1.64,bt:10.5}],
+  jftc:[{k:"Prime Video",n:1519,a:4.7,b:6.1},{k:"Netflix",n:699,a:6.0,b:9.4},{k:"Disney+",n:253,a:7.1,b:7.5},{k:"U-NEXT・Paravi",n:236,a:8.9,b:6.8},{k:"YouTube Premium",n:232,a:9.9,b:9.1},{k:"Hulu",n:220,a:8.6,b:7.7},{k:"DAZN",n:160,a:8.1,b:5.0},{k:"ABEMAプレミアム",n:152,a:11.8,b:11.8}]
+});
+DATA.src.push(
+  ["図9","スカパーJSAT「テレビ放送と動画配信サービスに関する調査2024」（ネットエイジア実施、2024年4月）","https://prtimes.jp/main/html/rd/p/000000025.000032742.html"],
+  ["図9","Google「Gemini comes to Google TV」2025年9月22日","https://blog.google/products-and-platforms/platforms/google-tv/gemini-google-tv/"],
+  ["図9","Amazon「Alexa+ on Fire TV」","https://aboutamazon.com/news/devices/alexa-plus-fire-tv-free-ai"],
+  ["図9","Amazon「Alexa+の日本での提供を開始」2026年10月29日","https://www.aboutamazon.jp/news/devices/amazon-launches-alexa-plus-in-japan"],
+  ["図9","PCWorld（Roku AI音声検索）","https://www.pcworld.com/article/2941278/rokus-adding-ai-search-and-hopefully-better-recommendations.html"],
+  ["図9","Samsung（Microsoft Copilot搭載）","https://news.samsung.com/us/samsung-brings-microsoft-copilot-to-2025-tvs-and-monitors-unlocking-smarter-on-screen-experiences/"],
+  ["図9","LG（webOS 25、Copilot）","https://www.lg.com/it/magazine/aggiornamento-a-webOS-25/"],
+  ["図9","AV Watch（TVS REGZA、2025年4月8日）","https://av.watch.impress.co.jp/docs/news/2004811.html"],
+  ["図9","PHILE WEB（シャープ AQUOS AI、2026年5月14日）","https://www.phileweb.com/news/d-av/202605/14/65119.html"],
+  ["図9","ソニー BRAVIA 製品ページ","https://www.sony.jp/bravia/products/K-XR80M2/feature_4"],
+  ["図9","PC Watch「ソニー、TV事業を新会社に継承。TCLとの合弁」2026年1月20日","https://pc.watch.impress.co.jp/docs/news/2079403.html"],
+  ["図9","BCN+R「ソニーよ、お前もか」テレビ事業の外資化とシェア（2026年2月1日）","https://www.bcnretail.com/market/detail/20260201_593437.html"],
+  ["図9","MONOist「東芝がテレビ事業を中国ハイセンスに譲渡」2017年11月15日","https://monoist.itmedia.co.jp/mn/articles/1711/15/news067.html"],
+  ["図9","AV Watch「ヤマダ×JVCのFire TV内蔵スマートテレビ」","https://av.watch.impress.co.jp/docs/news/2030022.html"],
+  ["図9","Hisense CES 2026（Copilot統合、共同通信PRワイヤー）","https://kyodonewsprwire.jp/release/202601082125"],
+  ["図9","AV Watch（TCL Gemini for Google TV、2026年8月31日）","https://av.watch.impress.co.jp/docs/news/2137042.html"],
+  ["図9","PHILE WEB（パナソニック・JVC Alexa+、2026年10月29日）","https://www.phileweb.com/news/d-av/202610/29/66260.html"],
+  ["図9","TVerヘルプ「TVerコンシェルジュ（β版）とはなんですか？」2026年10月6日更新","https://help.tver.jp/hc/ja/articles/55437735040793"],
+  ["図9","サイバーエージェント（ABEMA×ChatGPT、2026年4月28日）","https://www.cyberagent.co.jp/news/detail/id=33311"],
+  ["図9","Netflix ヘルプセンター（AIディスカバー）","https://help.netflix.com/ja/node/708961964266596"],
+  ["図9","The Walt Disney Company（Disney+のAI検索、2026年8月6日）","https://thewaltdisneycompany.com/news/ai-powered-search-espn-disney-plus/"],
+  ["図11","公正取引委員会「コネクテッドTV及び動画配信サービス等の利用実態に関する消費者向けアンケート調査結果」2024年3月","https://www.jftc.go.jp/houdou/pressrelease/2024/mar/240306_bessi.pdf"],
+  ["図11","IPG（TVer地方局向け入稿システムとの連携、2026年8月18日）","https://prtimes.jp/main/html/rd/p/000000059.000107518.html"],
+  ["図11","エム・データ（AI×HRのメタデータ生成支援、2026年6月9日）","https://prtimes.jp/main/html/rd/p/000000014.000166454.html"],
+  ["図11","エム・データ（KDDI「Buffmee」、2026年10月26日）","https://mdata.tv/info/20261026_01/"],
+  ["図11","東京ニュース通信社（採用情報）","https://tokyonews.co.jp/recruit/staff/page11/"],
+  ["図11","ワイヤーアクション「TVでた蔵」","https://datazoo.jp/tvdatazoo"],
+  ["図11","NHK番組表API","https://api-portal.nhk.or.jp/"],
+  ["図11","A-PAB メタデータ検討資料 Ver.3.0（2025年9月）","https://www.apab.or.jp/wp-content/uploads/2025/09/metadata-concept_ver3.0_20250904.pdf"]
+);
+function draw10(){
+  kpis('k10',DATA.jpk);
+  const cell=c=>`<div class="cell ${c.c}"><b>${c.n}</b>${c.t}<br><span class="st ${c.c}">${c.st}</span></div>`;
+  const arrows=['テレビにOSを載せる','OSのホーム画面にサービスが並ぶ'];
+  document.getElementById('m10').innerHTML=DATA.aimap.map((L,i)=>`<div class="stk${L.king?' king':''}"><div class="stkh"><span class="stkno">${L.no}</span><b>${L.title}</b><span class="stkrole">${L.role}</span>${L.king?'<span class="kingtag">AIの入口を握る</span>':''}</div>${L.groups.map(g=>`<div class="lane"><div class="mhead">${g.label}</div><div class="cells">${g.cells.map(cell).join('')}</div></div>`).join('')}</div>${i<arrows.length?`<div class="stkarr">↓ ${arrows[i]}</div>`:''}`).join('');
+}
+function draw11(){}
+function draw12(){
+  const D=DATA.jlift, el=document.getElementById('c12'), W=Math.max(340,el.clientWidth||900), narrow=W<600, H=narrow?420:520, m={l:narrow?48:70,r:narrow?16:40,t:20,b:56};
+  const s=svgIn('c12',W,H);
+  const x=d3.scaleLog().domain([3.5,80]).range([m.l,W-m.r]), y=d3.scaleLog().domain([0.45,1.9]).range([H-m.b,m.t]), r=d3.scaleSqrt().domain([0,1519]).range([0,narrow?20:30]);
+  const col=d=>d.l>=1.4?css('--c1'):(d.l>=1?'#2f5f99':css('--c2'));
+  s.append('g').attr('class','grid').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).tickValues([5,10,20,40,70]).tickSize(-(H-m.t-m.b)).tickFormat(''));
+  s.append('g').attr('class','axis').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).tickValues([5,10,20,40,70]).tickFormat(d=>d+'%'));
+  s.append('g').attr('class','axis').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).tickValues([0.5,0.75,1,1.25,1.5]).tickFormat(d=>d+'倍'));
+  s.append('line').attr('x1',m.l).attr('x2',W-m.r).attr('y1',y(1)).attr('y2',y(1)).attr('stroke',css('--fg2')).attr('stroke-dasharray','5 4');
+  s.append('text').attr('class','lbl m').attr('x',(m.l+W-m.r)/2).attr('y',H-14).attr('text-anchor','middle').text('利用率（有料サービス利用者2,287人に占める割合、対数目盛）');
+  s.append('text').attr('class','lbl m').attr('transform',`translate(14,${(m.t+H-m.b)/2}) rotate(-90)`).attr('text-anchor','middle').text('アイコンを理由に挙げる度合い（倍）');
+  if(!narrow){ s.append('text').attr('class','lbl m').attr('x',m.l+8).attr('y',m.t+14).text('利用が少ないほど、ホーム画面が効く');
+    s.append('text').attr('class','lbl m').attr('x',W-m.r-8).attr('y',y(0.62)).attr('text-anchor','end').text('広く使われるほど、作品と料金で選ばれる'); }
+  const pos={"YouTube Premium":[8,-8],"U-NEXT・Paravi":[8,14],"Hulu":[-8,16,'end'],"DAZN":[8,12],"Disney+":[8,-6],"dアニメストア":[-8,14,'end'],"J:COMオンデマンド":[8,14],"NHKオンデマンド":[8,-6],"WOWOWオンデマンド":[8,-8],"ABEMAプレミアム":[8,14],"Prime Video":[-8,-10,'end']};
+  D.forEach(d=>{ const rr=Math.max(6,r(d.n)), p=pos[d.k]||[rr+6,4], g=s.append('g');
+    g.append('circle').attr('cx',x(d.u)).attr('cy',y(d.l)).attr('r',rr).attr('fill',col(d)).attr('fill-opacity',.85).attr('stroke',css('--panel')).attr('stroke-width',2);
+    if(!narrow||d.l>=1.4||d.l<1) g.append('text').attr('class','lbl'+(d.l>=1.4?' b':'')).attr('x',x(d.u)+(p[0]>0?Math.max(p[0],rr+4):Math.min(p[0],-rr-4))).attr('y',y(d.l)+p[1]).attr('text-anchor',p[2]||'start').text(narrow?d.k.replace('オンデマンド','').replace('プレミアム','').replace('・Paravi',''):d.k);
+    g.append('circle').attr('class','hit').attr('cx',x(d.u)).attr('cy',y(d.l)).attr('r',rr+8);
+    hover(g.select('.hit'),()=>`<b>${d.k}</b><br>利用率 ${d.u.toFixed(1)}%（${d.n.toLocaleString()}人）<br>アイコンを理由に挙げた割合 ${d.r}%（除く全体 ${d.b}%）<br>倍率 ${d.l.toFixed(2)}倍<div class="s">公正取引委員会 2023年7月調査をもとに筆者算出</div>`); });
+  table('tb12',['サービス','利用者数','利用率','アイコンを理由に挙げた割合','除く全体','倍率','リモコンのボタン'],D.map(d=>[d.k,d.n.toLocaleString(),d.u.toFixed(1)+'%',d.r+'%',d.b+'%',d.l.toFixed(2)+'倍',d.bt+'%']));
+}
+
+const DRAW={t1:draw1,t2:draw2,t3:draw3,t4:draw4,t5:draw5,t6:draw6,t7:draw7,t8:draw8,t9:draw9,t10:draw10,t11:draw11,t12:draw12};
+function render(){ const on=document.querySelector('section.tab.on'); if(on && DRAW[on.id]) DRAW[on.id](); }
+// tabs & URL routing
+const TAB_TO_HASH={t1:'ep1-video',t2:'ep1-stock',t3:'ep1-fatigue',t4:'ep1-discovery',t5:'ep2-home',t6:'ep2-screen',t7:'ep2-os',t8:'ep2-europe',t10:'ep3-ai',t11:'ep3-data',t12:'ep3-japan',t9:'sources'};
+const HASH_TO_TAB=Object.fromEntries(Object.entries(TAB_TO_HASH).map(([k,v])=>[v,k]));
+function switchTab(tabId, updateHistory=true){
+  const btn=document.querySelector(`.tabs button[data-t="${tabId}"]`); if(!btn) return;
+  document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected', x===btn));
+  document.querySelectorAll('section.tab').forEach(s=>s.classList.toggle('on', s.id===tabId));
+  hideTip(); render();
+  try{ btn.scrollIntoView({inline:'nearest',block:'nearest'}); }catch(e){}
+  if(updateHistory){ const nh='#'+TAB_TO_HASH[tabId]; if(location.hash!==nh){ try{ history.pushState(null,'',nh); }catch(e){ /* プレビュー画面などURLを書き換えられない環境では何もしない */ } } }
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.t,true));
+// 図の単位で直接開くためのリンク（タブを開いてから、その図までスクロール）
+const FIG_HASH={'ep3-lift':['t12','fig12']};
+function syncFromHash(){ const h=location.hash.replace('#','').toLowerCase();
+  if(h && HASH_TO_TAB[h]) switchTab(HASH_TO_TAB[h],false);
+  else if(h && FIG_HASH[h]){ const [t,id]=FIG_HASH[h]; switchTab(t,false); setTimeout(()=>{ const el=document.getElementById(id); if(el){ const nav=document.querySelector('.tabs'); const off=(nav?nav.getBoundingClientRect().height:0)+16; window.scrollTo({top:el.getBoundingClientRect().top+window.scrollY-off}); } },60); } }
+window.addEventListener('hashchange',syncFromHash);
+window.addEventListener('popstate',syncFromHash);
+syncFromHash(); render();
+let _rz; window.addEventListener('resize',()=>{ clearTimeout(_rz); _rz=setTimeout(render,150); });
+</script>
+</body>
+</html>
